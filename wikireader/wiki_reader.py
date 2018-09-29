@@ -30,11 +30,11 @@ _POS = [
     "Verb"
 ]
 
-_POS_PATTERNS = { pos : re.compile(re.escape("===Noun===")) for pos in _POS }
+_POS_PATTERNS = {pos : re.compile("^===%s===$" % re.escape(pos), re.MULTILINE) for pos in _POS}
 
-_NEXT_L2_SECTION_PATTERN = re.compile("^==[^=]+==$", re.MULTILINE)
+_NEXT_L2_SECTION_PATTERN = re.compile("^==[^=]+?==$", re.MULTILINE)
 
-_NEXT_L3_SECTION_PATTERN = re.compile("^===[^=]+===$", re.MULTILINE)
+_NEXT_L3_SECTION_PATTERN = re.compile("^===[^=]+?===$", re.MULTILINE)
 
 
 def read_pages(filename) :
