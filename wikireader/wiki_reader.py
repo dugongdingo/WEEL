@@ -29,11 +29,11 @@ _POS = [
     "Verb",
 ]
 
-_POS_PATTERNS = {pos : re.compile("^===%s===$" % re.escape(pos), re.MULTILINE) for pos in _POS}
+_POS_PATTERNS = {pos : re.compile(r"^===%s===$" % re.escape(pos), re.MULTILINE) for pos in _POS}
 
 _NEXT_L2_SECTION_PATTERN = re.compile("^==[^=]+?==$", re.MULTILINE)
 
-_NEXT_L3_SECTION_PATTERN = re.compile("^===[^=]+?===$", re.MULTILINE)
+_NEXT_L4_SECTION_PATTERN = re.compile("^====[^=]+?====$", re.MULTILINE)
 
 def read_pages(filename) :
     """
@@ -63,13 +63,13 @@ def page_contains_lang(page_text, lang_code) :
     """
     Checks whether page contains entry for Language
     """
-    return _LANG_PATTERNS[lang_code].match(page_text)
+    return _LANG_PATTERNS[lang_code].search(page_text)
 
 def page_contains_pos(page_text, pos_name):
     """
     Checks whether page contains entry for Part of Speech
     """
-    return _POS_PATTERNS[pos_name].match(page_text)
+    return _POS_PATTERNS[pos_name].search(page_text)
 
 def extract_lang_section(page_text, lang_code) :
     """
@@ -78,7 +78,7 @@ def extract_lang_section(page_text, lang_code) :
     lang_section = page_contains_lang(page_text, lang_code)
     if lang_section :
         section_text = page_text[lang_section.end():]
-        next_section = _NEXT_L2_SECTION_PATTERN.match(section_text)
+        next_section = _NEXT_L2_SECTION_PATTERN.search(section_text)
         if next_section : section_text = section_text[:next_section.start()]
         return section_text
     raise ValueError
@@ -90,7 +90,7 @@ def extract_pos_section(page_text, pos_name) :
     pos_section = page_contains_pos(page_text, pos_name)
     if pos_section :
         section_text = page_text[pos_section.end():]
-        next_section = _NEXT_L3_SECTION_PATTERN.match(section_text)
+        next_section = _NEXT_L4_SECTION_PATTERN.search(section_text)
         if next_section : section_text = section_text[:next_section.start()]
         return section_text
     raise ValueError
@@ -107,9 +107,6 @@ def retrieve_definitions(filepath, extraction_dictionary) :
                     if page_contains_pos(lang_section, pos) :
                         pos_section = extract_pos_section(lang_section, pos)
                         yield title, lang, pos, pos_section
-                    if pos in lang_section :
-                        print("err")
-                        exit(1)
 
 if __name__ == "__main__" :
     filepath = "../../Desktop/enwiktionary-20180901-pages-meta-current.xml"
