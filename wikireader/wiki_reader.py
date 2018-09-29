@@ -35,6 +35,12 @@ _NEXT_L2_SECTION_PATTERN = re.compile("^==[^=]+?==$", re.MULTILINE)
 
 _NEXT_L4_SECTION_PATTERN = re.compile("^====[^=]+?====$", re.MULTILINE)
 
+_DEFINITION_PATTERN = re.compile(r"^#+ .*$")
+
+_QUOTE_PATTERN = re.compile(r"^#+[*] .*$")
+
+_EXAMPLE_PATTERN = re.compile(r"^#+: .*$")
+
 def read_pages(filename) :
     """
     Yields pages containing <title>...</title> and <text>...</text>
@@ -95,6 +101,15 @@ def extract_pos_section(page_text, pos_name) :
         return section_text
     raise ValueError
 
+def is_definition(line) :
+    return _DEFINITION_PATTERN.match(line)
+
+def is_quote(line) :
+    return _QUOTE_PATTERN.match(line)
+
+def is_example(line) :
+    return _EXAMPLE_PATTERN.match(line)
+
 def retrieve_definitions(filepath, extraction_dictionary) :
     """
     Retrieves definitions as specified by `extraction_dictionary`
@@ -106,9 +121,23 @@ def retrieve_definitions(filepath, extraction_dictionary) :
                 for pos in extraction_dictionary[lang] :
                     if page_contains_pos(lang_section, pos) :
                         pos_section = extract_pos_section(lang_section, pos)
-                        yield title, lang, pos, pos_section
+                        definition = ""
+                        for line in pos_section.split("\n") :
+                            line = line.strip()
+                            if is_definition(line) :
+                                definition = line
+                            elif is_quote(line) :
+                                yield title, lang, pos, definition, line, "quote"
+                            elif is_example(line) :
+                                yield title, lang, pos, definition, line, "example"
+
 
 if __name__ == "__main__" :
+    import csv
     filepath = "../../Desktop/enwiktionary-20180901-pages-meta-current.xml"
-    extraction_dictionary = {'EN': ['Noun']}
-    print(next(retrieve_definitions(filepath, extraction_dictionary)))
+    extraction_dictionary = {'EN': _POS}
+    with open("english_entries.csv", "w") as ostr:
+        csv_ostr = csv.writer(ostr)
+        csv_ostr.writerow(["title", "language", "POS", "definition", "example", "example type"])
+        for entry in retrieve_definitions(filepath, extraction_dictionary) :
+            csv_ostr.writerow(entry)
