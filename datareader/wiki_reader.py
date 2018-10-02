@@ -122,6 +122,7 @@ def retrieve_definitions(filepath, extraction_dictionary) :
                 lang_section = extract_lang_section(text, lang)
                 for pos in extraction_dictionary[lang] :
                     if page_contains_pos(lang_section, pos) :
+                        #TODO: cleanup wiki syntax
                         pos_section = extract_pos_section(lang_section, pos)
                         definition = ""
                         for line in pos_section.split("\n") :
