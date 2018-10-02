@@ -1,10 +1,12 @@
 import bs4
 import re
 
+# TODO: add other language codes
 _LANG_PATTERNS = {
     'EN' : re.compile("^==English==$", re.MULTILINE),
 }
 
+# From wikipedia
 _POS = [
     "Adjective",
     "Adverb",
@@ -134,7 +136,7 @@ def retrieve_definitions(filepath, extraction_dictionary) :
 
 if __name__ == "__main__" :
     import csv
-    filepath = "../../Desktop/enwiktionary-20180901-pages-meta-current.xml"
+    filepath = "../data/enwiktionary-20180901-pages-meta-current.xml"
     extraction_dictionary = {'EN': _POS}
     with open("english_entries.csv", "w") as ostr:
         csv_ostr = csv.writer(ostr)
