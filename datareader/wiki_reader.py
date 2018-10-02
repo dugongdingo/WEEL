@@ -138,7 +138,7 @@ if __name__ == "__main__" :
     import csv
     filepath = "../data/enwiktionary-20180901-pages-meta-current.xml"
     extraction_dictionary = {'EN': _POS}
-    with open("english_entries.csv", "w") as ostr:
+    with open("../data/wiki_english_entries.csv", "w") as ostr:
         csv_ostr = csv.writer(ostr)
         csv_ostr.writerow(["title", "language", "POS", "definition", "example", "example type"])
         for entry in retrieve_definitions(filepath, extraction_dictionary) :
