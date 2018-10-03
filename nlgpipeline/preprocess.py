@@ -6,7 +6,7 @@ import itertools
 
 def from_file(datafile) :
     """
-    create (word, definition) pairs from parsed enwiktionary/ WordNet
+    create (word, definition) pairs from parsed wiktionary/ WordNet
     """
     with open(datafile, "r") as istr :
         istr.readline() #skip header
@@ -14,6 +14,7 @@ def from_file(datafile) :
         for row in csv_istr :
             yield row[0], row[3]
 
+# start of sentence & end of sentence tokens
 SOS = "<SOS>"
 EOS = "<EOS>"
 
@@ -61,15 +62,19 @@ class Vocab :
     def type_count(self) :
         return sum(v for k, v in self._counter)
 
-def process(sequences, preprocess=None) :
-    """
-    Builds a Vocab for all words sequences
-    Returns the Vocab object and the processed sequences
-    """
-    if preprocess : sequences = map(preprocess, sequences)
-    voc = Vocab()
-    return voc, [[voc[w] for w in seq] for seq in sequences]
+    def decrypt(self, sequence):
+        i2v = self.index2vocab
+        return [i2v[t] for t in sequence]
 
-if __name__ == "__main__" :
-    v, seqs  = process(from_file("../data/wiki_english_entries.csv"), preprocess=lambda t:t[0])
-    print(len(v))
+    def encrypt(self, sequence):
+        return [self[t] for t in sequence]
+
+    @classmethod
+    def process(cls, sequences, preprocess=None) :
+        """
+        Builds a Vocab for all words sequences
+        Returns the Vocab object and the processed sequences
+        """
+        if preprocess : sequences = map(preprocess, sequences)
+        voc = cls()
+        return voc, [voc.encrypt(seq) for seq in sequences]
