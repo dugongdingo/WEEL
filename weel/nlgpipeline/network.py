@@ -4,6 +4,7 @@ import math
 import random
 import time
 
+import tqdm
 import torch
 import torch.nn.functional as functional
 
@@ -79,7 +80,7 @@ class Seq2SeqModel() :
             max_length=MAX_LENGTH,
             teacher_forcing_ratio=0.5,
             learning_rate=0.001,
-            criterion=torch.nn.NLLLoss(),
+            criterion=torch.nn.NLLLoss()
     ) :
         self.max_length = max_length
         self.teacher_forcing_ratio = teacher_forcing_ratio
@@ -154,44 +155,31 @@ class Seq2SeqModel() :
 
     def train(self, ipts, opts, n_iters, print_every=1, plot_every=100) :
         start = time.time()
-        plot_losses = []
-        print_loss_total = 0  # Reset every print_every
-        plot_loss_total = 0  # Reset every plot_every
+        losses = []
 
         training_pairs = itertools.cycle(map(lambda p:map(Seq2SeqModel.to_tensor, p), zip(ipts, opts)))
 
-        for iter in range(n_iters):
-            training_pair = list(next(training_pairs))
-            input_tensor = training_pair[0]
-            target_tensor = training_pair[1]
+        with tqdm.tqdm(total=n_iters, desc="Training", leave=False) as pbar :
+            for iter in range(n_iters):
+                training_pair = list(next(training_pairs))
+                input_tensor = training_pair[0]
+                target_tensor = training_pair[1]
 
-            loss = self._train_one(input_tensor, target_tensor)
-            print_loss_total += loss
-            plot_loss_total += loss
+                losses.append(self._train_one(input_tensor, target_tensor))
 
-            if (iter+1) % print_every == 0:
-                iter_ = iter + 1
-                print_loss_avg = print_loss_total / print_every
-                print_loss_total = 0
-                print('%s (%d %d%%) %.4f' % (timeSince(start, iter_ / n_iters),
-                                             iter_, iter_ / n_iters * 100, print_loss_avg))
-
-            if iter % plot_every == 0:
-                plot_loss_avg = plot_loss_total / plot_every
-                plot_losses.append(plot_loss_avg)
-                plot_loss_total = 0
+                pbar.update(1)
+        return losses
 
     def run(self, input):
         with torch.no_grad():
-            input_tensor = to_tensor(self.encoder_vocab.encrypt(input))
+            input_tensor = Seq2SeqModel.to_tensor(input)
             input_length = input_tensor.size()[0]
             encoder_hidden = self.encoder.initHidden()
 
             encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=device)
 
             for ei in range(input_length):
-                encoder_output, encoder_hidden = self.encoder(input_tensor[ei],
-                                                         encoder_hidden)
+                encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
                 encoder_outputs[ei] += encoder_output[0, 0]
 
             decoder_input = torch.tensor([self.sos], device=device)  # SOS
@@ -227,5 +215,6 @@ if __name__ == "__main__" :
     enc_voc, input = Vocab.process(input, preprocess=lambda seq: list(seq) + [EOS])
     dec_voc, output = Vocab.process(output, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
     model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc)
-    model.train(input, output, 5000)
-    model.run(input[5000])
+    model.train(input, output, 20000)
+    words, att = model.run(input[0])
+    print(words)

@@ -45,7 +45,7 @@ class Vocab :
 
     @property
     def index2vocab(self) :
-        return {v:k for k,v in self._vocab}
+        return {v:k for k,v in self._vocab.items()}
 
     def __len__(self) :
         return len(self._vocab)
