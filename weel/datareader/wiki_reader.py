@@ -134,13 +134,14 @@ def retrieve_definitions(filepath, extraction_dictionary) :
                             elif is_example(line) :
                                 yield title, lang, pos, definition, line, "example"
 
-
-if __name__ == "__main__" :
+def export(filepath, export_path) :
     import csv
-    filepath = "../data/enwiktionary-20180901-pages-meta-current.xml"
     extraction_dictionary = {'EN': _POS}
-    with open("../data/wiki_english_entries.csv", "w") as ostr:
+    with open(export_path, "w") as ostr:
         csv_ostr = csv.writer(ostr)
         csv_ostr.writerow(["title", "language", "POS", "definition", "example", "example type"])
         for entry in retrieve_definitions(filepath, extraction_dictionary) :
             csv_ostr.writerow(entry)
+
+if __name__ == "__main__" :
+    export(sys.argv[1], "../data/wiki_english_entries.csv")

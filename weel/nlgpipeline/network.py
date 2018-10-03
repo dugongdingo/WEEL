@@ -9,7 +9,6 @@ import torch
 import torch.nn.functional as functional
 
 from .preprocess import SOS, EOS
-from ..utils import asMinutes, timeSince
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -207,14 +206,3 @@ class Seq2SeqModel() :
     @staticmethod
     def to_tensor(seq) :
         return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
-
-if __name__ == "__main__" :
-    from .preprocess import from_file, Vocab, SOS, EOS
-
-    input, output = zip(*from_file("weel/data/wn_english_entries.csv"))
-    enc_voc, input = Vocab.process(input, preprocess=lambda seq: list(seq) + [EOS])
-    dec_voc, output = Vocab.process(output, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
-    model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc)
-    model.train(input, output, 20000)
-    words, att = model.run(input[0])
-    print(words)
