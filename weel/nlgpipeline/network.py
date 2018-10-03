@@ -1,5 +1,6 @@
 # mostly copied from the torch tutorial.
 import itertools
+import math
 import random
 import time
 
@@ -96,6 +97,8 @@ class Seq2SeqModel() :
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=learning_rate)
         self.decoder_vocab = decoder_vocab
         self.criterion = criterion
+        self.sos = self.decoder_vocab.encrypt((SOS,))
+        self.eos = self.decoder_vocab[EOS]
 
     def _train_one(self, ipt, opt):
         #def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
@@ -114,9 +117,8 @@ class Seq2SeqModel() :
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(ipt[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
-        sos = self.decoder_vocab.encrypt((SOS,))
-        eos = self.decoder_vocab[EOS]
-        decoder_input = torch.tensor([sos], device=device)
+
+        decoder_input = torch.tensor([self.sos], device=device)
 
         decoder_hidden = encoder_hidden
 
@@ -139,7 +141,7 @@ class Seq2SeqModel() :
                 decoder_input = topi.squeeze().detach()  # detach from history as input
 
                 loss += self.criterion(decoder_output, opt[di])
-                if decoder_input.item() == eos:
+                if decoder_input.item() == self.eos:
                     break
 
         loss.backward()
@@ -149,7 +151,7 @@ class Seq2SeqModel() :
 
         return loss.item() / target_length
 
-    def train(self, ipts, opts, n_iters) :
+    def train(self, ipts, opts, n_iters, print_every=100, plot_every=100) :
         start = time.time()
         plot_losses = []
         print_loss_total = 0  # Reset every print_every
@@ -166,21 +168,69 @@ class Seq2SeqModel() :
             print_loss_total += loss
             plot_loss_total += loss
 
-            """if (iter+1) % print_every == 0:
+            if (iter+1) % print_every == 0:
+                iter_ = iter + 1
                 print_loss_avg = print_loss_total / print_every
                 print_loss_total = 0
-                print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-                                             iter, iter / n_iters * 100, print_loss_avg))
+                print('%s (%d %d%%) %.4f' % (timeSince(start, iter_ / n_iters),
+                                             iter_, iter_ / n_iters * 100, print_loss_avg))
 
             if iter % plot_every == 0:
                 plot_loss_avg = plot_loss_total / plot_every
                 plot_losses.append(plot_loss_avg)
-                plot_loss_total = 0"""
+                plot_loss_total = 0
 
+    def run(self, input):
+        with torch.no_grad():
+            input_tensor = to_tensor(self.encoder_vocab.encrypt(input))
+            input_length = input_tensor.size()[0]
+            encoder_hidden = self.encoder.initHidden()
+
+            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=device)
+
+            for ei in range(input_length):
+                encoder_output, encoder_hidden = self.encoder(input_tensor[ei],
+                                                         encoder_hidden)
+                encoder_outputs[ei] += encoder_output[0, 0]
+
+            decoder_input = torch.tensor([self.sos], device=device)  # SOS
+
+            decoder_hidden = encoder_hidden
+
+            decoded_words = []
+            decoder_attentions = torch.zeros(self.max_length, self.max_length)
+
+            for di in range(self.max_length):
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(
+                    decoder_input, decoder_hidden, encoder_outputs)
+                decoder_attentions[di] = decoder_attention.data
+                topv, topi = decoder_output.data.topk(1)
+                if topi.item() == self.eos:
+                    decoded_words.append(EOS)
+                    break
+                else:
+                    decoded_words.append(self.decoder_vocab.index2vocab[topi.item()])
+
+                decoder_input = topi.squeeze().detach()
+
+            return decoded_words, decoder_attentions[:di + 1]
 
     @staticmethod
     def to_tensor(seq) :
         return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
+
+def asMinutes(s):
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 if __name__ == "__main__" :
     from .preprocess import from_file, Vocab, SOS, EOS
@@ -190,3 +240,4 @@ if __name__ == "__main__" :
     dec_voc, output = Vocab.process(output, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
     model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc)
     model.train(input, output, 5000)
+    model.run(input[5000])
