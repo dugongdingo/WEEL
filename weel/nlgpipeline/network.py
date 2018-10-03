@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as functional
 
 from .preprocess import SOS, EOS
+from ..utils import asMinutes, timeSince
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -151,7 +152,7 @@ class Seq2SeqModel() :
 
         return loss.item() / target_length
 
-    def train(self, ipts, opts, n_iters, print_every=100, plot_every=100) :
+    def train(self, ipts, opts, n_iters, print_every=1, plot_every=100) :
         start = time.time()
         plot_losses = []
         print_loss_total = 0  # Reset every print_every
@@ -219,23 +220,10 @@ class Seq2SeqModel() :
     def to_tensor(seq) :
         return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
 
-def asMinutes(s):
-    m = math.floor(s / 60)
-    s -= m * 60
-    return '%dm %ds' % (m, s)
-
-
-def timeSince(since, percent):
-    now = time.time()
-    s = now - since
-    es = s / (percent)
-    rs = es - s
-    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
-
 if __name__ == "__main__" :
     from .preprocess import from_file, Vocab, SOS, EOS
 
-    input, output = zip(*from_file("data/wn_english_entries.csv"))
+    input, output = zip(*from_file("weel/data/wn_english_entries.csv"))
     enc_voc, input = Vocab.process(input, preprocess=lambda seq: list(seq) + [EOS])
     dec_voc, output = Vocab.process(output, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
     model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc)
