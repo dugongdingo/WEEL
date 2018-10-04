@@ -7,7 +7,9 @@ _POS = [
     'v',
     'a',
     'r',
+    's',
 ]
+
 
 def retrieve_definitions(extraction_dictionary):
     for ss in wn.all_synsets() :
@@ -19,10 +21,10 @@ def retrieve_definitions(extraction_dictionary):
                             if lemma.name() in set(ex.split()) :
                                 yield lemma.name(), l, p, ss.definition(), ex
 
-if __name__ == "__main__" :
+def export(export_path) :
     extraction_dictionary = {'eng': _POS}
-    with open("../data/wn_english_entries.csv", "w") as ostr:
+    with open(export_path, "w") as ostr:
         csv_ostr = csv.writer(ostr)
         csv_ostr.writerow(["title", "language", "POS", "definition", "example"])
-        for entry in sorted(set(retrieve_definitions(extraction_dictionary))):
+        for entry in sorted(set(retrieve_definitions(extraction_dictionary))) :
             csv_ostr.writerow(entry)

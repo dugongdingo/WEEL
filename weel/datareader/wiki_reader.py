@@ -1,9 +1,10 @@
 import bs4
 import re
 
+
 # TODO: add other language codes
 _LANG_PATTERNS = {
-    'EN' : re.compile("^==English==$", re.MULTILINE),
+    'EN' : re.compile(r"^==English==$", re.MULTILINE),
 }
 
 # From wikipedia
@@ -31,11 +32,15 @@ _POS = [
     "Verb",
 ]
 
+_XML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.MULTILINE | re.DOTALL)
+
 _POS_PATTERNS = {pos : re.compile(r"^===%s===$" % re.escape(pos), re.MULTILINE) for pos in _POS}
 
-_NEXT_L2_SECTION_PATTERN = re.compile("^==[^=]+?==$", re.MULTILINE)
+_NEXT_L2_SECTION_PATTERN = re.compile(r"^==[^=]+?==$", re.MULTILINE)
 
-_NEXT_L4_SECTION_PATTERN = re.compile("^====[^=]+?====$", re.MULTILINE)
+_NEXT_L3_SECTION_PATTERN = re.compile(r"^===[^=]+?===$", re.MULTILINE)
+
+_NEXT_L4_SECTION_PATTERN = re.compile(r"^====[^=]+?====$", re.MULTILINE)
 
 _DEFINITION_PATTERN = re.compile(r"^#+ .*$")
 
@@ -98,8 +103,18 @@ def extract_pos_section(page_text, pos_name) :
     pos_section = page_contains_pos(page_text, pos_name)
     if pos_section :
         section_text = page_text[pos_section.end():]
+        # next section closes the relevant subsection
         next_section = _NEXT_L4_SECTION_PATTERN.search(section_text)
-        if next_section : section_text = section_text[:next_section.start()]
+        if next_section :
+            section_text = section_text[:next_section.start()]
+        else :
+            next_section = _NEXT_L3_SECTION_PATTERN.search(section_text)
+            if next_section :
+                section_text = section_text[:next_section.start()]
+            else :
+                next_section = _NEXT_L2_SECTION_PATTERN.search(section_text)
+                if next_section :
+                    section_text = section_text[:next_section.start()]
         return section_text
     raise ValueError
 
@@ -112,6 +127,105 @@ def is_quote(line) :
 def is_example(line) :
     return _EXAMPLE_PATTERN.match(line)
 
+def remove_XML_comments(section) :
+    """
+    Removes XML inline comments
+    """
+    results = list(_XML_COMMENT_PATTERN.finditer(section))
+    if not len(results) : return section
+    for matched in reversed(results) :
+        section = section[:matched.start()] + section[matched.end():]
+    return section
+
+
+def _parse_meta(char_itr) :
+    """
+    Parse meta ( {{meta}} ) blocks
+    """
+    meta = ""
+    while True :
+        c0, c1, c2 = next(char_itr)
+        if c0 == '}' and c1 == '}' :
+            drop = next(char_itr)
+            meta = meta.split("|")
+            if len(meta) > 1 :
+                if meta[0] == "ux" :
+                    return meta[-1]
+                try:
+                    return dict(t for t in (s.split("=") for s in meta) if len(t) == 2)["passage"]
+                except KeyError:
+                    pass
+            return ""
+        elif c0 == '[' and c1 == '[' :
+            drop = next(char_itr)
+            meta += _parse_link(char_itr)
+        elif c0 == '{' and c1 == '{':
+            drop = next(char_itr)
+            meta += _parse_meta(char_itr)
+        elif c0 == '\'' and c1 == '\'':
+            if c2 == '\'' :
+                drop = next(char_itr)
+            drop = next(char_itr)
+        else :
+            meta += c0 if c0 not in "\n\r" else " "
+
+
+def _parse_link(char_itr) :
+    """
+    Parse link ( [[link]] ) blocks
+    """
+    link = ""
+    while True :
+        c0, c1, c2 = next(char_itr)
+        if c0 == ']' and c1 == ']' :
+            drop = next(char_itr)
+            return link
+        elif c0 == '|' :
+            link = ""
+        elif c0 == '[' and c1 == '[' :
+            drop = next(char_itr)
+            link += _parse_link(char_itr)
+        elif c0 == '{' and c1 == '{':
+            drop = next(char_itr)
+            link += _parse_meta(char_itr)
+        elif c0 == '\'' and c1 == '\'':
+            if c2 == '\'' :
+                drop = next(char_itr)
+            drop = next(char_itr)
+        else :
+            link += c0 if c0 not in "\n\r" else " "
+
+
+def cleanup_wikisyntax(section) :
+    """
+    Cleans up a section using a character iterator with two characters look-ahead.
+    Recursive syntax is dealt with using recursive calls
+    """
+    char_itr = zip(section, section[1:], section[2:])
+    out = ""
+    while True :
+        try :
+            c0, c1, c2 = next(char_itr)
+            if c0 == c1 :
+                if c0 == '\'' : #drop bold & italic formatting
+                    if c0 == c2 :
+                        drop = next(char_itr)
+                    drop = next(char_itr)
+                elif c0 == '[' : # links
+                    drop = next(char_itr)
+                    out += _parse_link(char_itr)
+                elif c0 == '{' : # metas
+                    drop = next(char_itr)
+                    out += _parse_meta(char_itr)
+                else :
+                    out += c0
+            else :
+                out += c0
+        except StopIteration :
+            break
+    return out
+
+
 def retrieve_definitions(filepath, extraction_dictionary) :
     """
     Retrieves definitions as specified by `extraction_dictionary`
@@ -122,8 +236,9 @@ def retrieve_definitions(filepath, extraction_dictionary) :
                 lang_section = extract_lang_section(text, lang)
                 for pos in extraction_dictionary[lang] :
                     if page_contains_pos(lang_section, pos) :
-                        #TODO: cleanup wiki syntax
                         pos_section = extract_pos_section(lang_section, pos)
+                        pos_section = remove_XML_comments(pos_section)
+                        pos_section = cleanup_wikisyntax(pos_section)
                         definition = ""
                         for line in pos_section.split("\n") :
                             line = line.strip()
@@ -134,6 +249,7 @@ def retrieve_definitions(filepath, extraction_dictionary) :
                             elif is_example(line) :
                                 yield title, lang, pos, definition, line, "example"
 
+
 def export(filepath, export_path) :
     import csv
     extraction_dictionary = {'EN': _POS}
@@ -143,5 +259,7 @@ def export(filepath, export_path) :
         for entry in retrieve_definitions(filepath, extraction_dictionary) :
             csv_ostr.writerow(entry)
 
+
 if __name__ == "__main__" :
-    export(sys.argv[1], "../data/wiki_english_entries.csv")
+    import sys
+    export(sys.argv[1], "./weel/data/wiki_english_entries.csv")

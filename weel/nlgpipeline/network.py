@@ -8,6 +8,7 @@ import tqdm
 import torch
 import torch.nn.functional as functional
 
+
 from .preprocess import SOS, EOS
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
