@@ -159,7 +159,7 @@ class Seq2SeqModel() :
 
         training_pairs = itertools.cycle(map(lambda p:map(Seq2SeqModel.to_tensor, p), zip(ipts, opts)))
 
-        with tqdm.tqdm(total=n_iters, desc="Training", leave=False) as pbar :
+        with tqdm.tqdm(total=n_iters, desc="Training", leave=False, ascii=True) as pbar :
             for iter in range(n_iters):
                 training_pair = list(next(training_pairs))
                 input_tensor = training_pair[0]
@@ -202,7 +202,7 @@ class Seq2SeqModel() :
 
                 decoder_input = topi.squeeze().detach()
 
-            return decoded_words, decoder_attentions[:di + 1]
+            return decoded_words
 
     @staticmethod
     def to_tensor(seq) :

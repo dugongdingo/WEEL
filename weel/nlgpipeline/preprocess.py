@@ -18,18 +18,23 @@ def from_file(datafile) :
 SOS = "<SOS>"
 EOS = "<EOS>"
 
+OOV = "<OOV>"
+
 class Vocab :
     """
     class util for text processing
     """
     def __init__(self) :
         self._index = itertools.count()
-        self._vocab = collections.defaultdict(lambda:next(self._index))
+        self._vocab = collections.defaultdict(self._next_idx)
         self._counter = collections.Counter()
-        added_by_default = self._vocab[SOS], self._vocab[EOS]
+        added_by_default = self._vocab[SOS], self._vocab[EOS], self._vocab[OOV]
+
+    def _next_idx(self):
+        return next(self._index)
 
     def add(self, word) :
-        self.Counter.add(word)
+        self._counter.update([word])
         return self._vocab[word]
 
     def __getitem__(self, word) :
@@ -66,8 +71,10 @@ class Vocab :
         i2v = self.index2vocab
         return [i2v[t] for t in sequence]
 
-    def encrypt(self, sequence):
-        return [self[t] for t in sequence]
+    def encrypt(self, sequence, frozen=False):
+        if frozen :
+            return [self[t] if t in self else self[OOV] for t in sequence]
+        return [self.add(t) for t in sequence]
 
     @classmethod
     def process(cls, sequences, preprocess=None) :
