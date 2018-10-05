@@ -76,6 +76,6 @@ with open(test_result_path, "w") as ostr:
     input_test = [model.encoder_vocab.encrypt(ipt, frozen=True) for ipt in input_test]
     for word, definition in zip(input_test, output_test) :
         prediction = model.run(word)
-        csv_writer.writerow([word, definition, prediction])
+        csv_writer.writerow([model.encoder_vocab.decrypt(word), definition, prediction])
 
 print_now("all done!")
