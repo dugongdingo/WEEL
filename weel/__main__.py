@@ -5,30 +5,44 @@ import os
 import pickle
 import shutil
 
-from .datareader.wordnet_reader import export
 from .nlgpipeline.preprocess import from_file, Vocab, EOS, SOS
 from .nlgpipeline.network import Seq2SeqModel
 
 def print_now(line) :
     print(datetime.datetime.now(), ":", line)
 
+USE_WIKI = False
+
+if USE_WIKI :
+    from .datareader.wiki_reader import export
+else:
+    from .datareader.wordnet_reader import export
+
 DATA_STORAGE = "./weel/data"
 
 MODELS_STORAGE = "./weel/models"
 
-extraction_path = os.path.join(DATA_STORAGE, "wn_english_entries.csv")
+extraction_path = os.path.join(DATA_STORAGE, ("wiki" if USE_WIKI else "wn") +"_english_entries.csv")
 
 model_path = os.path.join(MODELS_STORAGE, "weel.nlg_pipeline.pickle")
 
 test_result_path = os.path.join(DATA_STORAGE, "weel.nlg_pipeline.results.csv")
 
 # DATA
-if not os.path.isdir(DATA_STORAGE) :
-    path_to_wiki = sys.argv[1]
-    os.makedirs(DATA_STORAGE)
-    shutils.copyfile(path_to_wiki, os.path.join(DATA_STORAGE, os.path.basename(path_to_wiki)))
-    print_now("retrieving data...")
-    export(extraction_path)
+if USE_WIKI :
+    if not os.path.isdir(DATA_STORAGE) :
+        try :
+            os.makedirs(DATA_STORAGE)
+            path_to_wiki = sys.argv[1]
+            shutils.copyfile(path_to_wiki, os.path.join(DATA_STORAGE, os.path.basename(path_to_wiki)))
+            print_now("retrieving data...")
+            export(path_to_wiki, extraction_path)
+        except KeyError :
+            print("I need the path towards a wiktionary dump to start up.")
+else :
+    if not os.path.isfile(extraction_path) :
+        export(extraction_path)
+
 
 input, output = zip(*sorted(set(from_file(extraction_path))))
 
