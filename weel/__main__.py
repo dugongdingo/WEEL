@@ -90,9 +90,9 @@ print_now("testing model...")
 with open(test_result_path, "w") as ostr:
     csv_writer = csv.writer(ostr)
     csv_writer.writerow(["Word", "Definition", "Prediction"])
-    input_test = [model.encoder_vocab.encrypt(ipt, frozen=True) for ipt in input_test]
-    for word, definition in zip(input_test, output_test) :
-        prediction = model.run(word)
-        csv_writer.writerow([model.encoder_vocab.decrypt(word), definition, prediction])
+    input_test_encrypted = model.encoder_vocab.encrypt_all(input_test, frozen=True)
+    predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
+    for word, prediction, definition in zip(input_test, predictions, output_test) :
+        csv_writer.writerow([word, definition, prediction])
 
 print_now("all done!")

@@ -194,12 +194,10 @@ class Seq2SeqModel() :
                     decoder_input, decoder_hidden, encoder_outputs)
                 decoder_attentions[di] = decoder_attention.data
                 topv, topi = decoder_output.data.topk(1)
+                decoded_words.append(topi.item())
                 if topi.item() == self.eos:
-                    decoded_words.append(EOS)
                     break
-                else:
-                    decoded_words.append(self.decoder_vocab.index2vocab[topi.item()])
-
+                    
                 decoder_input = topi.squeeze().detach()
 
             return decoded_words

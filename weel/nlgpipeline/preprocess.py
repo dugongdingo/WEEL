@@ -27,12 +27,24 @@ class Vocab :
         self._index = itertools.count()
         self._vocab = collections.defaultdict(self._next_idx)
         self._counter = collections.Counter()
-        added_by_default = self._vocab[SOS], self._vocab[EOS], self._vocab[OOV]
+        indexed_by_default = self._vocab[SOS], self._vocab[EOS], self._vocab[OOV]
 
     def _next_idx(self):
         return next(self._index)
 
+    def trim(self, threshold=5) :
+        """
+        Remove all words below threshold
+        """
+        OOV_idx = self[OOV]
+        for word in self._vocab :
+            if self._counter[word] < threshold :
+                self._vocab[word] = OOV_idx
+
     def add(self, word) :
+        """
+        Add word, update counts
+        """
         self._counter.update([word])
         return self._vocab[word]
 
@@ -45,10 +57,16 @@ class Vocab :
 
     @property
     def vocab2index(self) :
+        """
+        get {word:index} dict
+        """
         return dict(self._vocab)
 
     @property
     def index2vocab(self) :
+        """
+        get {index:word} dict
+        """
         return {v:k for k,v in self._vocab.items()}
 
     def __len__(self) :
@@ -60,20 +78,49 @@ class Vocab :
     def __iter__(self) :
         return iter(self._vocab)
 
-    def token_count(self) :
+    def type_count(self) :
+        """
+        Number of distinct items
+        """
         return self.__len__()
 
-    def type_count(self) :
+    def token_count(self) :
+        """
+        Number of counted items
+        """
         return sum(v for k, v in self._counter)
 
-    def decrypt(self, sequence):
+    def decrypt(self, sequence) :
+        """
+        transform a sequence of indices into a sequence of words
+        """
         i2v = self.index2vocab
         return [i2v[t] for t in sequence]
 
-    def encrypt(self, sequence, frozen=False):
+    def decrypt_all(self, sequences) :
+        """
+        transform sequences of indices into sequences of words
+        """
+        i2v = self.index2vocab
+        return [[i2v[t] for t in seq] for seq in sequences]
+
+    def encrypt(self, sequence, frozen=False) :
+        """
+        transform a sequence of words into a sequence of indices
+        if not frozen, vocabulary counts will be updated
+        """
         if frozen :
             return [self[t] if t in self else self[OOV] for t in sequence]
         return [self.add(t) for t in sequence]
+
+    def encrypt_all(self, sequences, frozen=False) :
+        """
+        transform sequences of words into sequences of indices
+        if not frozen, vocabulary counts will be updated
+        """
+        if frozen :
+            return [[self[t] if t in self else self[OOV] for t in seq] for seq in sequences]
+        return [[self.add(t) for t in seq] for seq in sequences]
 
     @classmethod
     def process(cls, sequences, preprocess=None) :
