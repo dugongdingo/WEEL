@@ -13,7 +13,7 @@ from .preprocess import SOS, EOS
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MAX_LENGTH = 50
+MAX_LENGTH = 100
 
 class EncoderRNN(torch.nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -116,7 +116,7 @@ class Seq2SeqModel() :
 
         loss = 0
 
-        for ei in range(input_length):
+        for ei in range(min(input_length, self.max_length)):
             encoder_output, encoder_hidden = self.encoder(ipt[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 

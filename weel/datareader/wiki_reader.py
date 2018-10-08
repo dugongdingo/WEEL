@@ -252,7 +252,7 @@ def retrieve_definitions(filepath, extraction_dictionary) :
 
 def export(filepath, export_path) :
     import csv
-    extraction_dictionary = {'EN': _POS}
+    extraction_dictionary = {'EN': ['Noun']}
     with open(export_path, "w") as ostr:
         csv_ostr = csv.writer(ostr)
         csv_ostr.writerow(["title", "language", "POS", "definition", "example", "example type"])

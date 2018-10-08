@@ -22,11 +22,19 @@ DATA_STORAGE = "./weel/data"
 
 MODELS_STORAGE = "./weel/models"
 
-extraction_path = os.path.join(DATA_STORAGE, ("wiki" if USE_WIKI else "wn") +"_english_entries.csv")
+NO_AMBIG = True
 
-model_path = os.path.join(MODELS_STORAGE, "weel.nlg_pipeline.pickle")
+KEEP_EXAMPLES = False
 
-test_result_path = os.path.join(DATA_STORAGE, "weel.nlg_pipeline.results.csv")
+extraction_prefix = "wiki_" if USE_WIKI else "wn_"
+extraction_prefix += "unambig_" if NO_AMBIG else "ambig_"
+extraction_prefix += "withexamples_" if KEEP_EXAMPLES else "noexamples_"
+
+extraction_path = os.path.join(DATA_STORAGE, extraction_prefix + "englishentries.csv")
+
+model_path = os.path.join(MODELS_STORAGE, extraction_prefix + "weelmodel.nlgpipeline.pickle")
+
+test_result_path = os.path.join(DATA_STORAGE, extraction_prefix + "weel.nlgpipeline.results.csv")
 
 # DATA
 if USE_WIKI :
@@ -41,21 +49,15 @@ if USE_WIKI :
             print("I need the path towards a wiktionary dump to start up.")
 else :
     if not os.path.isfile(extraction_path) :
-        export(extraction_path)
+        print_now("retrieving data...")
+        export(extraction_path, unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES)
 
 
-input, output = zip(*sorted(set(from_file(extraction_path))))
-
-print_now("selecting unambiguous data...")
-defs = collections.Counter(input)
-words, definitions = [i for i in input if defs[i] == 1], [o for i,o in zip(input, output) if defs[i] == 1]
+print_now("selecting data...")
+words, definitions = zip(*from_file(extraction_path))
 proportion = int(7 * len(words) /10)
 input_train, output_train = words[:proportion], definitions[:proportion]
 input_test, output_test = words[proportion:], definitions[proportion:]
-print_now("dumping data...")
-with open("weel/data/wn_unambiguous_words.csv", "w") as ostr:
-    for i, o in zip(words, defs) :
-        print(i, o, sep="\t", file=ostr)
 
 # GENERATION MODEL
 make_model = False
@@ -69,7 +71,8 @@ if make_model :
     print_now("building model...")
     enc_voc, input_train = Vocab.process(input_train, preprocess=lambda seq: list(seq) + [EOS])
     dec_voc, output_train = Vocab.process(output_train, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
-    model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc)
+    max_length = max(max(map(len, input_train)), max(map(len, output_train)))
+    model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc, max_length=max_length)
 
     print_now("training model...")
     model.train(input_train, output_train, len(input_train))

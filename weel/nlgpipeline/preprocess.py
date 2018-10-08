@@ -17,7 +17,6 @@ def from_file(datafile) :
 # start of sentence & end of sentence tokens
 SOS = "<SOS>"
 EOS = "<EOS>"
-
 OOV = "<OOV>"
 
 class Vocab :
