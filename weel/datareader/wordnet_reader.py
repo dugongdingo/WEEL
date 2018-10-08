@@ -19,10 +19,10 @@ def retrieve_definitions(extraction_dictionary, with_example=True):
                     for lemma in ss.lemmas(lang=l):
                         if with_example :
                             for ex in ss.examples() :
-                                if lemma.name() in set(ex.split()) :
-                                    yield lemma.name(), l, p, ss.definition(), ex
+                                if lemma.name().lower() in set(ex.split()) :
+                                    yield lemma.name().lower(), l, p, ss.definition(), ex
                         else :
-                            yield lemma.name(), l, p, ss.definition()
+                            yield lemma.name().lower(), l, p, ss.definition()
 
 def export(export_path, unambiguous=False, with_example=False) :
     retrieving_func = retrieve_unambiguous if unambiguous else retrieve_definitions
@@ -37,7 +37,7 @@ def export(export_path, unambiguous=False, with_example=False) :
             csv_ostr.writerow(entry)
 
 def retrieve_unambiguous(extraction_dictionary, with_example=True) :
-    for lemma, lang in {(lm, lg)
+    for lemma, lang in {(lm.lower(), lg)
         for lg in extraction_dictionary
         for p in extraction_dictionary[lg]
         for lm in wn.all_lemma_names(lang=lg, pos=p)
