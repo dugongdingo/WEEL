@@ -23,8 +23,9 @@ class EncoderRNN(torch.nn.Module):
         self.gru = torch.nn.GRU(fasttext_embeddings.get_input_matrix().shape[1], hidden_size)
 
     def forward(self, input, hidden):
-        embedded = torch.FloatTensor(self.embedding.get_input_vector(input)).view(1, 1, -1)
-        output = embedded
+        output = self.embedding.get_input_vector(input.item())
+        output = torch.FloatTensor(output)
+        output = output.view(1, 1, -1)
         output, hidden = self.gru(output, hidden)
         return output, hidden
 
@@ -152,20 +153,16 @@ class Seq2SeqModel() :
 
         return loss.item() / target_length
 
-    def train(self, ipts, opts, n_iters, print_every=1, plot_every=100) :
+    def train(self, ipts, opts, n_iters) :
         start = time.time()
         losses = []
 
-        training_pairs = itertools.cycle(map(lambda p:map(Seq2SeqModel.to_tensor, p), zip(ipts, opts)))
-
         with tqdm.tqdm(total=n_iters, desc="Training", leave=False, ascii=True) as pbar :
-            for iter in range(n_iters):
-                training_pair = list(next(training_pairs))
-                input_tensor = training_pair[0]
-                target_tensor = training_pair[1]
-
+            for input_tensor, target_tensor in zip(
+                map(Seq2SeqModel.to_tensor, ipts),
+                map(Seq2SeqModel.to_tensor, opts)
+            ) :
                 losses.append(self._train_one(input_tensor, target_tensor))
-
                 pbar.update(1)
         return losses
 
