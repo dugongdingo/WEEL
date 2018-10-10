@@ -3,9 +3,10 @@ import csv
 import datetime
 import os
 import pickle
+import random
 import shutil
 
-from .nlgpipeline.preprocess import from_file, Vocab, EOS, SOS
+from .nlgpipeline.preprocess import from_file, Vocab, FastTextVocab, EOS, SOS
 from .nlgpipeline.network import Seq2SeqModel
 
 def print_now(line) :
@@ -26,15 +27,17 @@ NO_AMBIG = True
 
 KEEP_EXAMPLES = False
 
+PATH_TO_FASTTEXT = os.path.join(DATA_STORAGE, "crawl-300d-2M-subword/crawl-300d-2M-subword.bin")
+
 extraction_prefix = "wiki_" if USE_WIKI else "wn_"
 extraction_prefix += "unambig_" if NO_AMBIG else "ambig_"
 extraction_prefix += "withexamples_" if KEEP_EXAMPLES else "noexamples_"
 
 extraction_path = os.path.join(DATA_STORAGE, extraction_prefix + "englishentries.csv")
 
-model_path = os.path.join(MODELS_STORAGE, extraction_prefix + "weelmodel.nlgpipeline.pickle")
+model_path = os.path.join(MODELS_STORAGE, extraction_prefix + "weelmodel.nlgpipeline_fasttext.pickle")
 
-test_result_path = os.path.join(DATA_STORAGE, extraction_prefix + "weel.nlgpipeline.results.csv")
+test_result_path = os.path.join(DATA_STORAGE, extraction_prefix + "weel.nlgpipeline_fasttext.results.csv")
 
 # DATA
 if USE_WIKI :
@@ -54,13 +57,15 @@ else :
 
 
 print_now("selecting data...")
-words, definitions = zip(*from_file(extraction_path))
+data = list(from_file(extraction_path))
+random.shuffle(data)
+words, definitions = zip(*data)
 proportion = int(7 * len(words) /10)
 input_train, output_train = words[:proportion], definitions[:proportion]
 input_test, output_test = words[proportion:], definitions[proportion:]
 
 # GENERATION MODEL
-make_model = False
+make_model = True
 model = None
 if not os.path.isdir(MODELS_STORAGE) :
     os.makedirs(MODELS_STORAGE)
@@ -69,11 +74,11 @@ make_model = make_model or not os.path.isfile(model_path)
 
 if make_model :
     print_now("building model...")
-    enc_voc, input_train = Vocab.process(input_train, preprocess=lambda seq: list(seq) + [EOS])
+    enc_voc = FastTextVocab(PATH_TO_FASTTEXT)
+    input_train = enc_voc.encrypt_all(input_train)
     dec_voc, output_train = Vocab.process(output_train, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
-    model = Seq2SeqModel(len(enc_voc), 256, len(dec_voc), enc_voc, dec_voc, max_length=max_length)
-
+    model = Seq2SeqModel( 256, len(dec_voc), enc_voc, dec_voc, max_length=max_length)
     print_now("training model...")
     model.train(input_train, output_train, len(input_train))
 
@@ -83,14 +88,14 @@ if make_model :
 else :
     print_now("loading model...")
     with open(model_path, "rb") as istr:
-        model = pickle.loads(istr)
+        model = pickle.loads(istr.read())
 
 # TESTING
 print_now("testing model...")
 with open(test_result_path, "w") as ostr:
     csv_writer = csv.writer(ostr)
     csv_writer.writerow(["Word", "Definition", "Prediction"])
-    input_test_encrypted = model.encoder_vocab.encrypt_all(input_test, frozen=True)
+    input_test_encrypted = model.encoder_vocab.encrypt_all(input_test)
     predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
     for word, prediction, definition in zip(input_test, predictions, output_test) :
         csv_writer.writerow([word, definition, prediction])

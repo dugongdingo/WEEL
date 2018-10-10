@@ -11,19 +11,19 @@ import torch.nn.functional as functional
 
 from .preprocess import SOS, EOS
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MAX_LENGTH = 100
 
 class EncoderRNN(torch.nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, hidden_size, fasttext_embeddings):
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
-        self.embedding = torch.nn.Embedding(input_size, hidden_size)
-        self.gru = torch.nn.GRU(hidden_size, hidden_size)
+        self.embedding = fasttext_embeddings
+        self.gru = torch.nn.GRU(fasttext_embeddings.get_input_matrix().shape[1], hidden_size)
 
     def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
+        embedded = torch.FloatTensor(self.embedding.get_input_vector(input)).view(1, 1, -1)
         output = embedded
         output, hidden = self.gru(output, hidden)
         return output, hidden
@@ -71,7 +71,6 @@ class AttnDecoderRNN(torch.nn.Module):
 class Seq2SeqModel() :
     def __init__(
             self,
-            input_size,
             hidden_size,
             output_size,
             encoder_vocab,
@@ -85,8 +84,8 @@ class Seq2SeqModel() :
         self.max_length = max_length
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.encoder = EncoderRNN(
-            input_size,
-            hidden_size
+            hidden_size,
+            encoder_vocab.model
         ).to(device)
         self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=learning_rate)
         self.encoder_vocab = encoder_vocab
@@ -197,7 +196,7 @@ class Seq2SeqModel() :
                 decoded_words.append(topi.item())
                 if topi.item() == self.eos:
                     break
-                    
+
                 decoder_input = topi.squeeze().detach()
 
             return decoded_words

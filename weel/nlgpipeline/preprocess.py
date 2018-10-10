@@ -2,6 +2,8 @@ import collections
 import csv
 import itertools
 
+import fastText
+
 #TODO: mutliple languages in single file support?
 
 def from_file(datafile) :
@@ -131,3 +133,16 @@ class Vocab :
         if preprocess : sequences = map(preprocess, sequences)
         voc = cls()
         return voc, [voc.encrypt(seq) for seq in sequences]
+
+class FastTextVocab :
+    def __init__(self, ft_modelpath):
+        self.model = fastText.load_model(ft_modelpath)
+
+    def encrypt(self, sequence):
+        words, indices = self.model.get_subwords(sequence)
+        if not words[0].startswith("<"):
+            return indices[1:] + indices[:1]
+        return indices
+
+    def encrypt_all(self, sequences):
+        return [self.encrypt(seq) for seq in sequences]
