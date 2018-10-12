@@ -13,4 +13,6 @@ nltk.download('wordnet')`
 The fasttext pypi package cannot handle the models downloadable via Facebook Research.
 Try installing fastText (mind the case) : see https://github.com/facebookresearch/fastText/tree/master/python
 
+The necessary FastText model is available on the dedicated web page: https://fasttext.cc/docs/en/english-vectors.html
+
 run with `python3 -m weel`.

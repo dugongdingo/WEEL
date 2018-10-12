@@ -119,12 +119,21 @@ def extract_pos_section(page_text, pos_name) :
     raise ValueError
 
 def is_definition(line) :
+    """
+    checks whether a line looks like a definition
+    """
     return _DEFINITION_PATTERN.match(line)
 
 def is_quote(line) :
+    """
+    checks whether a line looks like a quote
+    """
     return _QUOTE_PATTERN.match(line)
 
 def is_example(line) :
+    """
+    checks whether a line looks like an example
+    """
     return _EXAMPLE_PATTERN.match(line)
 
 def remove_XML_comments(section) :
@@ -251,6 +260,9 @@ def retrieve_definitions(filepath, extraction_dictionary) :
 
 
 def export(filepath, export_path) :
+    """
+    parse data and write it to a csv file
+    """
     import csv
     extraction_dictionary = {'EN': ['Noun']}
     with open(export_path, "w") as ostr:
@@ -260,6 +272,6 @@ def export(filepath, export_path) :
             csv_ostr.writerow(entry)
 
 
-if __name__ == "__main__" :
+if __name__ == "__main__" : #TODO: move main functionality to __main__.py
     import sys
     export(sys.argv[1], "./weel/data/wiki_english_entries.csv")

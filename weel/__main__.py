@@ -10,7 +10,12 @@ import shutil
 from .nlgpipeline.preprocess import from_file, Vocab, FastTextVocab, EOS, SOS
 from .nlgpipeline.network import Seq2SeqModel
 
+#TODO: transfer settings & prefixes computation to settings.py
+
 def print_now(line) :
+    """
+    utility function: prepend timestamp to std output
+    """
     print(datetime.datetime.now(), ":", line)
 
 from .settings import *
@@ -76,7 +81,7 @@ proportion = int(7 * len(words) /10)
 input_train, output_train = words[:proportion], definitions[:proportion]
 input_test, output_test = words[proportion:], definitions[proportion:]
 
-# GENERATION MODEL
+# MODEL GENERATION
 make_model = True
 model = None
 if not os.path.isdir(MODELS_STORAGE) :

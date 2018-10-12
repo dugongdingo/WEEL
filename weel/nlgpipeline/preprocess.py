@@ -137,6 +137,9 @@ class Vocab :
         return voc, [voc.encrypt(seq) for seq in sequences]
 
 class FastTextVocab :
+    """
+    Embedding lookup utility class based on a FastText model
+    """
     def __init__(self, ft_modelpath):
         self.model = fastText.load_model(ft_modelpath)
         self.subseq_dict = {}
@@ -144,10 +147,18 @@ class FastTextVocab :
         self.embedding_matrix = None
 
     def encrypt(self, sequence):
+        """
+        transform a sequence of words into a sequence of indices
+        if not frozen, vocabulary counts will be updated
+        """
         return [self.lookup[s] for s in self.subseq_dict[sequence]]
 
     def encrypt_all(self, sequences, compute=False):
-        if compute :
+        """
+        transform sequences of words into sequences of indices
+        if compute, the lookup table and the embedding matrix for the model are computed
+        """
+        if compute : #TODO: separate computation from encryption in two distinct functions
             _vecs = {}
             for sequence in sequences :
                 subwords, indices = self.model.get_subwords(sequence)

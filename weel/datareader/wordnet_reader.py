@@ -12,6 +12,9 @@ _POS = [
 
 
 def retrieve_definitions(extraction_dictionary, with_example=True):
+    """
+    read definitions from nltk wordnet
+    """
     for ss in wn.all_synsets() :
         for l in extraction_dictionary :
             for p in extraction_dictionary[l] :
@@ -25,6 +28,9 @@ def retrieve_definitions(extraction_dictionary, with_example=True):
                             yield lemma.name().lower(), l, p, ss.definition()
 
 def export(export_path, unambiguous=False, with_example=False) :
+    """
+    parse data and write it to a csv file
+    """
     retrieving_func = retrieve_unambiguous if unambiguous else retrieve_definitions
     extraction_dictionary = {'eng': ['n']}
     with open(export_path, "w") as ostr:
@@ -37,6 +43,9 @@ def export(export_path, unambiguous=False, with_example=False) :
             csv_ostr.writerow(entry)
 
 def retrieve_unambiguous(extraction_dictionary, with_example=True) :
+    """
+    read unambiguous definitions from nltk wordnet
+    """
     for lemma, lang in {(lm.lower(), lg)
         for lg in extraction_dictionary
         for p in extraction_dictionary[lg]
