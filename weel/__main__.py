@@ -1,3 +1,4 @@
+import argparse
 import collections
 import csv
 import datetime
@@ -12,22 +13,25 @@ from .nlgpipeline.network import Seq2SeqModel
 def print_now(line) :
     print(datetime.datetime.now(), ":", line)
 
-USE_WIKI = False
+from .settings import *
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-d", "--dropout", type=float, default=0)
+parser.add_argument("-l", "--learningrate", type=float, default=0)
+parser.add_argument("-e", "--epochs", type=int, default=0)
+args = parser.parse_args()
+
+DROPOUT = args.dropout or DROPOUT
+
+LEARNING_RATE = args.learningrate or LEARNING_RATE
+
+EPOCHS = args.epochs or EPOCHS
 
 if USE_WIKI :
     from .datareader.wiki_reader import export
 else:
     from .datareader.wordnet_reader import export
 
-DATA_STORAGE = "./weel/data"
-
-MODELS_STORAGE = "./weel/models"
-
-NO_AMBIG = True
-
-KEEP_EXAMPLES = False
-
-PATH_TO_FASTTEXT = os.path.join(DATA_STORAGE, "crawl-300d-2M-subword/crawl-300d-2M-subword.bin")
 
 extraction_prefix = "wiki_" if USE_WIKI else "wn_"
 extraction_prefix += "unambig_" if NO_AMBIG else "ambig_"
@@ -37,7 +41,15 @@ extraction_path = os.path.join(DATA_STORAGE, extraction_prefix + "englishentries
 
 model_path = os.path.join(MODELS_STORAGE, extraction_prefix + "weelmodel.nlgpipeline_fasttext.pickle")
 
-test_result_path = os.path.join(DATA_STORAGE, extraction_prefix + "weel.nlgpipeline_fasttext.results.csv")
+param_prefix = "lr" + str(LEARNING_RATE) +\
+    "_d" + str(DROPOUT) +\
+    "_e" + str(EPOCHS) +\
+    "_"
+
+test_result_path = os.path.join(
+    RESULTS_STORAGE,
+    extraction_prefix + param_prefix + "weel.nlgpipeline_fasttext.results.csv"
+)
 
 # DATA
 if USE_WIKI :
@@ -79,9 +91,17 @@ if make_model :
     input_train = enc_voc.encrypt_all(input_train)
     dec_voc, output_train = Vocab.process(output_train, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
-    model = Seq2SeqModel(256, len(dec_voc), enc_voc, dec_voc, max_length=max_length)
+    model = Seq2SeqModel(
+        256,
+        len(dec_voc),
+        enc_voc,
+        dec_voc,
+        max_length=max_length,
+        dropout_p=DROPOUT,
+        learning_rate=LEARNING_RATE,
+    )
     print_now("training model...")
-    model.train(input_train, output_train, len(input_train))
+    model.train(input_train, output_train, epochs=EPOCHS)
 
     print_now("saving model...")
     with open(model_path, "wb") as ostr :
