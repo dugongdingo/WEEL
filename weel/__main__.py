@@ -106,7 +106,29 @@ if make_model :
         learning_rate=LEARNING_RATE,
     )
     print_now("training model...")
-    model.train(input_train, output_train, epochs=EPOCHS)
+    for epoch in map(str, range(1, EPOCHS + 1)):
+        data = list(zip(input_train, output_train))
+        random.shuffle(data)
+        input_train, output_train = zip(*data)
+        model.train(input_train, output_train, epoch_number=epoch)
+
+        param_prefix = "lr" + str(LEARNING_RATE) +\
+            "_d" + str(DROPOUT) +\
+            "_e" + epoch +\
+            "_"
+        test_result_path = os.path.join(
+            RESULTS_STORAGE,
+            extraction_prefix + param_prefix + "weel.nlgpipeline_fasttext.results.csv"
+        )
+        print_now("testing model...")
+        with open(test_result_path, "w") as ostr:
+            csv_writer = csv.writer(ostr)
+            csv_writer.writerow(["Word", "Definition", "Prediction"])
+            input_test_encrypted = model.encoder_vocab.encrypt_all(input_test)
+            predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
+            for word, prediction, definition in zip(input_test, predictions, output_test) :
+                csv_writer.writerow([word, definition, prediction])
+
 
     print_now("saving model...")
     with open(model_path, "wb") as ostr :
@@ -115,15 +137,5 @@ else :
     print_now("loading model...")
     with open(model_path, "rb") as istr:
         model = pickle.loads(istr.read())
-
-# TESTING
-print_now("testing model...")
-with open(test_result_path, "w") as ostr:
-    csv_writer = csv.writer(ostr)
-    csv_writer.writerow(["Word", "Definition", "Prediction"])
-    input_test_encrypted = model.encoder_vocab.encrypt_all(input_test)
-    predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
-    for word, prediction, definition in zip(input_test, predictions, output_test) :
-        csv_writer.writerow([word, definition, prediction])
 
 print_now("all done!")

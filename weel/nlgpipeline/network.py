@@ -152,18 +152,18 @@ class Seq2SeqModel() :
 
         return loss.item() / target_length
 
-    def train(self, ipts, opts, epochs=5) :
+    def train(self, ipts, opts, epoch_number=None) :
         start = time.time()
         losses = []
         n_iters = len(ipts)
-        for e in map(str, range(1, epochs+1)) :
-            with tqdm.tqdm(total=n_iters, desc="Training epoch #" + e, ascii=True) as pbar :
-                for input_tensor, target_tensor in zip(
-                    map(Seq2SeqModel.to_tensor, ipts),
-                    map(Seq2SeqModel.to_tensor, opts)
-                    ) :
-                    losses.append(self._train_one(input_tensor, target_tensor))
-                    pbar.update(1)
+
+        with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
+            for input_tensor, target_tensor in zip(
+                map(Seq2SeqModel.to_tensor, ipts),
+                map(Seq2SeqModel.to_tensor, opts)
+                ) :
+                losses.append(self._train_one(input_tensor, target_tensor))
+                pbar.update(1)
         return losses
 
     def run(self, input):
