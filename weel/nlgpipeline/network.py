@@ -103,7 +103,6 @@ class Seq2SeqModel() :
         self.eos = self.decoder_vocab[EOS]
 
     def _train_one(self, ipt, opt):
-        #def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
         encoder_hidden = self.encoder.initHidden()
 
         self.encoder_optimizer.zero_grad()
@@ -157,7 +156,7 @@ class Seq2SeqModel() :
         start = time.time()
         losses = []
         n_iters = len(ipts)
-        for e in map(str, range(epochs)) :
+        for e in map(str, range(1, epochs+1)) :
             with tqdm.tqdm(total=n_iters, desc="Training epoch #" + e, ascii=True) as pbar :
                 for input_tensor, target_tensor in zip(
                     map(Seq2SeqModel.to_tensor, ipts),
