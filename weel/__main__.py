@@ -75,10 +75,11 @@ make_model = make_model or not os.path.isfile(model_path)
 if make_model :
     print_now("building model...")
     enc_voc = FastTextVocab(PATH_TO_FASTTEXT)
+    enc_voc.encrypt_all(input_train + input_test, compute=True)
     input_train = enc_voc.encrypt_all(input_train)
     dec_voc, output_train = Vocab.process(output_train, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
-    model = Seq2SeqModel( 256, len(dec_voc), enc_voc, dec_voc, max_length=max_length)
+    model = Seq2SeqModel(256, len(dec_voc), enc_voc, dec_voc, max_length=max_length)
     print_now("training model...")
     model.train(input_train, output_train, len(input_train))
 

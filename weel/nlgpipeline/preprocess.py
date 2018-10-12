@@ -2,6 +2,8 @@ import collections
 import csv
 import itertools
 
+import numpy
+
 import fastText
 
 #TODO: mutliple languages in single file support?
@@ -137,12 +139,27 @@ class Vocab :
 class FastTextVocab :
     def __init__(self, ft_modelpath):
         self.model = fastText.load_model(ft_modelpath)
+        self.subseq_dict = {}
+        self.lookup = {}
+        self.embedding_matrix = None
 
     def encrypt(self, sequence):
-        words, indices = self.model.get_subwords(sequence)
-        if not words[0].startswith("<"):
-            return indices[1:] + indices[:1]
-        return indices
+        return [self.lookup[s] for s in self.subseq_dict[sequence]]
 
-    def encrypt_all(self, sequences):
+    def encrypt_all(self, sequences, compute=False):
+        if compute :
+            _vecs = {}
+            for sequence in sequences :
+                subwords, indices = self.model.get_subwords(sequence)
+                self.subseq_dict[sequence] = subwords
+                for subword, index in zip(subwords,indices) :
+                    if subword not in _vecs :
+                        _vecs[subword] = self.model.get_input_vector(index)
+            all_subs = {s for w in self.subseq_dict for s in self.subseq_dict[w]}
+            self.embedding_matrix = numpy.zeros((len(all_subs),self.model.get_dimension()))
+            del self.model
+            for i, s in enumerate(all_subs) :
+                self.embedding_matrix[i,:] = _vecs[s]
+                del _vecs[s]
+                self.lookup[s] = i
         return [self.encrypt(seq) for seq in sequences]

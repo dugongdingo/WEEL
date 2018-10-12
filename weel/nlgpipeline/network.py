@@ -19,13 +19,13 @@ class EncoderRNN(torch.nn.Module):
     def __init__(self, hidden_size, fasttext_embeddings):
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
-        self.embedding = fasttext_embeddings
-        self.gru = torch.nn.GRU(fasttext_embeddings.get_input_matrix().shape[1], hidden_size)
+        self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
+        self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
+        self.embedding.requires_grad = False
+        self.gru = torch.nn.GRU(fasttext_embeddings.shape[1], hidden_size)
 
     def forward(self, input, hidden):
-        output = self.embedding.get_input_vector(input.item())
-        output = torch.FloatTensor(output)
-        output = output.view(1, 1, -1)
+        output = self.embedding(input).view(1, 1, -1)
         output, hidden = self.gru(output, hidden)
         return output, hidden
 
@@ -86,7 +86,7 @@ class Seq2SeqModel() :
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.encoder = EncoderRNN(
             hidden_size,
-            encoder_vocab.model
+            encoder_vocab.embedding_matrix
         ).to(device)
         self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=learning_rate)
         self.encoder_vocab = encoder_vocab
