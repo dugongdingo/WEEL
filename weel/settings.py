@@ -11,6 +11,8 @@ USE_WIKI = False
 
 DATA_STORAGE = "./weel/data"
 
+PATH_TO_WIKI = os.path.join(DATA_STORAGE, "enwiktionary-20181001-pages-meta-current.xml")
+
 PATH_TO_FASTTEXT = os.path.join(DATA_STORAGE, "crawl-300d-2M-subword/crawl-300d-2M-subword.bin")
 
 MODELS_STORAGE = "./weel/models"
