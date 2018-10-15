@@ -41,6 +41,7 @@ else:
 extraction_prefix = "wiki_" if USE_WIKI else "wn_"
 extraction_prefix += "unambig_" if NO_AMBIG else "ambig_"
 extraction_prefix += "withexamples_" if KEEP_EXAMPLES else "noexamples_"
+extraction_prefix += "nomwe_" if NO_MWE else "withmwe_"
 
 extraction_path = os.path.join(DATA_STORAGE, extraction_prefix + "englishentries.csv")
 
@@ -70,7 +71,7 @@ if USE_WIKI :
 else :
     if not os.path.isfile(extraction_path) :
         print_now("retrieving data...")
-        export(extraction_path, unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES)
+        export(extraction_path, unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES, keep_mwe=not NO_MWE)
 
 
 print_now("selecting data...")

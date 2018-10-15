@@ -19,6 +19,8 @@ RESULTS_STORAGE = "./weel/results"
 
 NO_AMBIG = True
 
+NO_MWE = True
+
 KEEP_EXAMPLES = False
 
 LEARNING_RATE = 0.001
