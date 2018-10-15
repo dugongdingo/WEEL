@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 python3 -m venv .venv/weel
 
@@ -6,9 +6,11 @@ source .venv/weel/bin/activate
 
 pip3 install -r requirements.txt
 
+cd weel
 mkdir data
 mkdir results
 mkdir models
+cd ..
 
 mkdir .fasttext; cd .fasttext
 git clone https://github.com/facebookresearch/fastText.git
