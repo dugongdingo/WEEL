@@ -16,12 +16,12 @@ device = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LENGTH = 100
 
 class EncoderRNN(torch.nn.Module):
-    def __init__(self, hidden_size, fasttext_embeddings):
+    def __init__(self, hidden_size, fasttext_embeddings, retrain=False):
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
         self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
-        self.embedding.requires_grad = False
+        self.embedding.requires_grad = retrain
         self.gru = torch.nn.GRU(fasttext_embeddings.shape[1], hidden_size)
 
     def forward(self, input, hidden):
@@ -80,13 +80,15 @@ class Seq2SeqModel() :
             max_length=MAX_LENGTH,
             teacher_forcing_ratio=0.5,
             learning_rate=0.001,
+            retrain=False,
             criterion=torch.nn.NLLLoss()
     ) :
         self.max_length = max_length
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.encoder = EncoderRNN(
             hidden_size,
-            encoder_vocab.embedding_matrix
+            encoder_vocab.embedding_matrix,
+            retrain=retrain
         ).to(device)
         self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=learning_rate)
         self.encoder_vocab = encoder_vocab

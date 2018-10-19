@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--dropout", type=float, default=0)
 parser.add_argument("-l", "--learningrate", type=float, default=0)
 parser.add_argument("-e", "--epochs", type=int, default=0)
+parser.add_argument("-r", "--retrain", action="store_true", default=None)
 args = parser.parse_args()
 
 DROPOUT = args.dropout or DROPOUT
@@ -31,6 +32,8 @@ DROPOUT = args.dropout or DROPOUT
 LEARNING_RATE = args.learningrate or LEARNING_RATE
 
 EPOCHS = args.epochs or EPOCHS
+
+RETRAIN = args.retrain or RETRAIN
 
 if USE_WIKI :
     from .datareader.wiki_reader import export
@@ -51,6 +54,11 @@ param_prefix = "lr" + str(LEARNING_RATE) +\
     "_d" + str(DROPOUT) +\
     "_e" + str(EPOCHS) +\
     "_"
+
+if RETRAIN :
+    param_prefix += "retrain_"
+else:
+    param_prefix += "noretrain_"
 
 test_result_path = os.path.join(
     RESULTS_STORAGE,
@@ -74,7 +82,7 @@ else :
         export(extraction_path, unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES, keep_mwe=not NO_MWE)
 
 
-print_now("selecting data...")
+print_now("selecting data %s..." % extraction_prefix)
 data = list(from_file(extraction_path))
 random.shuffle(data)
 words, definitions = zip(*data)
@@ -91,7 +99,7 @@ if not os.path.isdir(MODELS_STORAGE) :
 make_model = make_model or not os.path.isfile(model_path)
 
 if make_model :
-    print_now("building model...")
+    print_now("building model %s..." % param_prefix)
     enc_voc = FastTextVocab(PATH_TO_FASTTEXT)
     enc_voc.encrypt_all(input_train + input_test, compute=True)
     input_train = enc_voc.encrypt_all(input_train)
@@ -105,8 +113,9 @@ if make_model :
         max_length=max_length,
         dropout_p=DROPOUT,
         learning_rate=LEARNING_RATE,
+        retrain=RETRAIN,
     )
-    print_now("training model...")
+    print_now("training model %s..." % param_prefix)
     for epoch in map(str, range(1, EPOCHS + 1)):
         data = list(zip(input_train, output_train))
         random.shuffle(data)
@@ -117,6 +126,10 @@ if make_model :
             "_d" + str(DROPOUT) +\
             "_e" + epoch +\
             "_"
+        if RETRAIN :
+            param_prefix += "retrain_"
+        else:
+            param_prefix += "noretrain_"
         test_result_path = os.path.join(
             RESULTS_STORAGE,
             extraction_prefix + param_prefix + "weel.nlgpipeline_fasttext.results.csv"
