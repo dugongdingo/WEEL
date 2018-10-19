@@ -2,12 +2,13 @@ import argparse
 import collections
 import csv
 import datetime
+import nltk.tokenize
 import os
 import pickle
 import random
 import shutil
 
-from .nlgpipeline.preprocess import from_file, Vocab, FastTextVocab, EOS, SOS
+from .nlgpipeline.preprocess import from_file, Vocab, FastTextVocab, FastTextSubWordVocab, EOS, SOS
 from .nlgpipeline.network import Seq2SeqModel
 
 #TODO: transfer settings & prefixes computation to settings.py
@@ -110,10 +111,18 @@ else :
         input_dev, output_dev = data_from_file(os.path.join(extraction_path, "dev.csv"))
         input_train, output_train = data_from_file(os.path.join(extraction_path, "train.csv"))
 
+input_rest = []
+output_rest = []
+
 if USE_DEV :
+    input_rest = input_test
+    output_rest = output_test
     input_test = input_dev
     output_test = output_dev
-    
+else :
+    input_rest = input_dev
+    output_rest = output_dev
+
 # MODEL GENERATION
 make_model = True
 model = None
@@ -124,10 +133,12 @@ make_model = make_model or not os.path.isfile(model_path)
 
 if make_model :
     print_now("building model %s..." % param_prefix)
-    enc_voc = FastTextVocab(PATH_TO_FASTTEXT)
-    enc_voc.encrypt_all(input_train + input_test, compute=True)
+    enc_voc = FastTextSubWordVocab(PATH_TO_FASTTEXT)
+    enc_voc.encrypt_all(input_train + input_test + input_rest, compute=True)
     input_train = enc_voc.encrypt_all(input_train)
-    dec_voc, output_train = Vocab.process(output_train, preprocess=lambda seq:[SOS] + seq.split() + [EOS])
+    dec_voc = FastTextVocab(PATH_TO_FASTTEXT)
+    dec_voc.encrypt_all(map(nltk.tokenize.word_tokenize, output_train + output_test + output_rest), compute=True)
+    output_train = dec_voc.encrypt_all(map(nltk.tokenize.word_tokenize, output_train))
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
     model = Seq2SeqModel(
         256,

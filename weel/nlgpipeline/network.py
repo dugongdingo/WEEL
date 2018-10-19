@@ -16,7 +16,12 @@ device = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LENGTH = 100
 
 class EncoderRNN(torch.nn.Module):
-    def __init__(self, hidden_size, fasttext_embeddings, retrain=False):
+    def __init__(
+        self,
+        hidden_size,
+        fasttext_embeddings,
+        retrain=False,
+    ):
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
@@ -34,16 +39,26 @@ class EncoderRNN(torch.nn.Module):
 
 
 class AttnDecoderRNN(torch.nn.Module):
-    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):
+    def __init__(
+        self,
+        hidden_size,
+        output_size,
+        fasttext_embeddings,
+        retrain=True,
+        dropout_p=0.1,
+        max_length=MAX_LENGTH,
+    ):
         super(AttnDecoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.dropout_p = dropout_p
         self.max_length = max_length
 
-        self.embedding = torch.nn.Embedding(self.output_size, self.hidden_size)
-        self.attn = torch.nn.Linear(self.hidden_size * 2, self.max_length)
-        self.attn_combine = torch.nn.Linear(self.hidden_size * 2, self.hidden_size)
+        self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
+        self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
+        self.embedding.requires_grad = retrain
+        self.attn = torch.nn.Linear(fasttext_embeddings.shape[1] + self.hidden_size, self.max_length)
+        self.attn_combine = torch.nn.Linear(fasttext_embeddings.shape[1] + self.hidden_size, self.hidden_size)
         self.dropout = torch.nn.Dropout(self.dropout_p)
         self.gru = torch.nn.GRU(self.hidden_size, self.hidden_size)
         self.out = torch.nn.Linear(self.hidden_size, self.output_size)
@@ -95,6 +110,7 @@ class Seq2SeqModel() :
         self.decoder = AttnDecoderRNN(
             hidden_size,
             output_size,
+            decoder_vocab.embedding_matrix,
             dropout_p=dropout_p,
             max_length=max_length
         ).to(device)
@@ -102,7 +118,7 @@ class Seq2SeqModel() :
         self.decoder_vocab = decoder_vocab
         self.criterion = criterion
         self.sos = self.decoder_vocab.encrypt((SOS,))
-        self.eos = self.decoder_vocab[EOS]
+        self.eos = self.decoder_vocab.lookup[EOS]
 
     def _train_one(self, ipt, opt):
         encoder_hidden = self.encoder.initHidden()

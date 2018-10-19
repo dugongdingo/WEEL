@@ -136,7 +136,7 @@ class Vocab :
         voc = cls()
         return voc, [voc.encrypt(seq) for seq in sequences]
 
-class FastTextVocab :
+class FastTextSubWordVocab :
     """
     Embedding lookup utility class based on a FastText model
     """
@@ -174,3 +174,45 @@ class FastTextVocab :
                 del _vecs[s]
                 self.lookup[s] = i
         return [self.encrypt(seq) for seq in sequences]
+
+class FastTextVocab :
+    """
+    Embedding lookup utility class based on a FastText model
+    """
+    def __init__(self, ft_modelpath):
+        self.model = fastText.load_model(ft_modelpath)
+        self.lookup = {}
+        self.embedding_matrix = None
+
+    def encrypt(self, sequence):
+        """
+        transform a sequence of words into a sequence of indices
+        if not frozen, vocabulary counts will be updated
+        """
+        return [self.lookup[s] for s in sequence]
+
+    def encrypt_all(self, sequences, compute=False):
+        """
+        transform sequences of words into sequences of indices
+        if compute, the lookup table and the embedding matrix for the model are computed
+        """
+        if compute : #TODO: separate computation from encryption in two distinct functions
+            _vecs = {
+                w : self.model.get_word_vector(w)
+                for s in sequences
+                for w in s
+            }
+            if not EOS in _vecs:
+                _vecs[EOS] = numpy.random.rand(self.model.get_dimension())
+            if not SOS in _vecs:
+                _vecs[SOS] = numpy.random.rand(self.model.get_dimension())
+
+            self.embedding_matrix = numpy.zeros((len(_vecs),self.model.get_dimension()))
+            del self.model
+            for i, s in enumerate(_vecs) :
+                self.embedding_matrix[i,:] = _vecs[s]
+                self.lookup[s] = i
+        return [self.encrypt(seq) for seq in sequences]
+
+    def __len__(self):
+        return self.embedding_matrix.shape[0]
