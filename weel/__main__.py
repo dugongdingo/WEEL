@@ -77,19 +77,43 @@ if USE_WIKI :
         except KeyError :
             print("I need the path towards a wiktionary dump to start up.")
 else :
-    if not os.path.isfile(extraction_path) :
+    if not os.path.isdir(extraction_path) :
+        os.makedirs(extraction_path)
         print_now("retrieving data...")
-        export(extraction_path, unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES, keep_mwe=not NO_MWE)
+        export(extraction_path + ".raw", unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES, keep_mwe=not NO_MWE)
+        print_now("selecting data %s..." % extraction_prefix)
+        data = list(from_file(extraction_path + ".raw"))
+        random.shuffle(data)
+        words, definitions = zip(*data)
+        proportion_train = int(8 * len(words) /10)
+        proportion_dev = int(9* len(words) /10)
+        input_train, output_train = words[:proportion_train], definitions[:proportion_train]
+        input_dev, output_dev = words[proportion_train:proportion_dev], definitions[proportion_train:proportion_dev]
+        input_test, output_test = words[proportion_dev:], definitions[proportion_dev:]
+        def data_to_file(input_data, output_data, path):
+            with open(path, "w") as ostr :
+                csv_ostr = csv.writer(ostr)
+                csv_ostr.writerow(["input", "output"])
+                for record in zip(input_data, output_data) :
+                    csv_ostr.writerow(record)
+        data_to_file(input_test, output_test, os.path.join(extraction_path, "test.csv"))
+        data_to_file(input_dev, output_dev, os.path.join(extraction_path, "dev.csv"))
+        data_to_file(input_train, output_train, os.path.join(extraction_path, "train.csv"))
+    else:
+        print_now("selecting data %s..." % extraction_prefix)
+        def data_from_file(path):
+            with open(path, "r") as istr:
+                istr.readline()
+                csv_istr = csv.reader(istr)
+                return zip(*(row for row in csv_istr))
+        input_test, output_test = data_from_file(os.path.join(extraction_path, "test.csv"))
+        input_dev, output_dev = data_from_file(os.path.join(extraction_path, "dev.csv"))
+        input_train, output_train = data_from_file(os.path.join(extraction_path, "train.csv"))
 
-
-print_now("selecting data %s..." % extraction_prefix)
-data = list(from_file(extraction_path))
-random.shuffle(data)
-words, definitions = zip(*data)
-proportion = int(7 * len(words) /10)
-input_train, output_train = words[:proportion], definitions[:proportion]
-input_test, output_test = words[proportion:], definitions[proportion:]
-
+if USE_DEV :
+    input_test = input_dev
+    output_test = output_dev
+    
 # MODEL GENERATION
 make_model = True
 model = None

@@ -32,3 +32,5 @@ DROPOUT = 0.1
 EPOCHS = 5
 
 RETRAIN = False
+
+USE_DEV = True
