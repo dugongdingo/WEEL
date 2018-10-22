@@ -178,7 +178,7 @@ if make_model :
             predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
             for word, (prediction, loss), definition in zip(input_test, predictions, output_test) :
                 csv_writer.writerow([word, definition, prediction])
-                test_losses.append(loss)
+                test_losses.append(loss/ len(list(map(nltk.tokenize.word_tokenize, definition))))
         print_now(
             "avg loss train:",
             sum(train_losses)/len(train_losses),
