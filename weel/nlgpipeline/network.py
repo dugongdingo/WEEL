@@ -186,6 +186,7 @@ class Seq2SeqModel() :
 
     def run(self, input):
         with torch.no_grad():
+            loss = 0
             input_tensor = Seq2SeqModel.to_tensor(input)
             input_length = input_tensor.size()[0]
             encoder_hidden = self.encoder.initHidden()
@@ -209,12 +210,13 @@ class Seq2SeqModel() :
                 decoder_attentions[di] = decoder_attention.data
                 topv, topi = decoder_output.data.topk(1)
                 decoded_words.append(topi.item())
+                loss += self.criterion(decoder_output, opt[di])
                 if topi.item() == self.eos:
                     break
 
                 decoder_input = topi.squeeze().detach()
 
-            return decoded_words
+            return decoded_words, loss.item()
 
     @staticmethod
     def to_tensor(seq) :

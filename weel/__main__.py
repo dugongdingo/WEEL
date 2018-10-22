@@ -13,11 +13,11 @@ from .nlgpipeline.network import Seq2SeqModel
 
 #TODO: transfer settings & prefixes computation to settings.py
 
-def print_now(line) :
+def print_now(*line) :
     """
     utility function: prepend timestamp to std output
     """
-    print(datetime.datetime.now(), ":", line)
+    print(datetime.datetime.now(), ":", *line)
 
 from .settings import *
 
@@ -155,7 +155,7 @@ if make_model :
         data = list(zip(input_train, output_train))
         random.shuffle(data)
         input_train, output_train = zip(*data)
-        model.train(input_train, output_train, epoch_number=epoch)
+        train_losses = model.train(input_train, output_train, epoch_number=epoch)
 
         param_prefix = "lr" + str(LEARNING_RATE) +\
             "_d" + str(DROPOUT) +\
@@ -170,13 +170,21 @@ if make_model :
             extraction_prefix + param_prefix + "weel.nlgpipeline_fasttext.results.csv"
         )
         print_now("testing model...")
+        test_losses = []
         with open(test_result_path, "w") as ostr:
             csv_writer = csv.writer(ostr)
             csv_writer.writerow(["Word", "Definition", "Prediction"])
             input_test_encrypted = model.encoder_vocab.encrypt_all(input_test)
             predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
-            for word, prediction, definition in zip(input_test, predictions, output_test) :
+            for word, (prediction, loss), definition in zip(input_test, predictions, output_test) :
                 csv_writer.writerow([word, definition, prediction])
+                test_losses.append(loss)
+        print_now(
+            "avg loss train:",
+            sum(train_losses)/len(train_losses),
+            ", avg loss test:",
+            sum(test_losses)/len(test_losses)
+        )
 
 
     print_now("saving model...")

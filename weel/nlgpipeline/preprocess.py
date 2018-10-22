@@ -161,8 +161,9 @@ class FastTextSubWordVocab :
         if compute : #TODO: separate computation from encryption in two distinct functions
             _vecs = {}
             for sequence in sequences :
+                _vecs["<hwv>"+sequence] = self.model.get_word_vector(sequence)
                 subwords, indices = self.model.get_subwords(sequence)
-                self.subseq_dict[sequence] = subwords
+                self.subseq_dict[sequence] = subwords + ["<hwv>"+sequence]
                 for subword, index in zip(subwords,indices) :
                     if subword not in _vecs :
                         _vecs[subword] = self.model.get_input_vector(index)
@@ -182,6 +183,7 @@ class FastTextVocab :
     def __init__(self, ft_modelpath):
         self.model = fastText.load_model(ft_modelpath)
         self.lookup = {}
+        self.rlookup ={}
         self.embedding_matrix = None
 
     def encrypt(self, sequence):
@@ -212,7 +214,14 @@ class FastTextVocab :
             for i, s in enumerate(_vecs) :
                 self.embedding_matrix[i,:] = _vecs[s]
                 self.lookup[s] = i
+                self.rlookup[i] = s
         return [self.encrypt(seq) for seq in sequences]
 
     def __len__(self):
         return self.embedding_matrix.shape[0]
+
+    def decrypt(self, sequence):
+        return [self.rlookup[i] for i in sequence]
+
+    def decrypt_all(self, sequences) :
+        return [decrypt(s) for s in sequences]
