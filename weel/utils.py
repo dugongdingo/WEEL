@@ -1,12 +1,17 @@
 import csv
 import datetime
 
+import nltk.tokenize
 import torch
 
 from .settings import DEVICE
+from .nlgpipeline.lookup import EOS, SOS
 
 def to_tensor(seq, device=DEVICE) :
     return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
+
+def to_sentence(raw_str):
+    return [SOS] + nltk.tokenize.word_tokenize(raw_str) + [EOS]
 
 def print_now(*line) :
     """

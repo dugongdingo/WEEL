@@ -122,8 +122,8 @@ class Seq2SeqModel() :
             output_size,
             encoder_embeddings,
             decoder_embeddings,
-            eos,
-            sos,
+            sequence_start=None,
+            end_signal=None,
             dropout_p=0.1,
             max_length=MAX_LENGTH,
             teacher_forcing_ratio=0.5,
@@ -148,8 +148,8 @@ class Seq2SeqModel() :
         ).to(DEVICE)
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=learning_rate)
         self.criterion = criterion
-        self.sequence_start = sos
-        self.end_signal = eos
+        self.sequence_start = sequence_start
+        self.end_signal = end_signal
 
     def _train_one(self, ipt, opt):
         encoder_hidden = self.encoder.initHidden()

@@ -7,7 +7,7 @@ import pickle
 import random
 import shutil
 
-from .utils import print_now, read_parsed_data_file, data_to_file, data_from_file
+from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file
 from .nlgpipeline.lookup import EOS, SOS, compute_lookup, translate, reverse_lookup
 from .nlgpipeline.network import Seq2SeqModel
 
@@ -121,7 +121,7 @@ if MAKE_MODEL :
     output_all = list(map(nltk.tokenize.word_tokenize, output_train + output_test + output_rest))
     decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT)
     output_train = translate(
-        [[SOS] + nltk.tokenize.word_tokenize(o) + [EOS] for o in output_train],
+        map(to_sentence, output_train),
         decoder_lookup,
     )
 
@@ -131,8 +131,8 @@ if MAKE_MODEL :
         len(decoder_lookup),
         subword_embeddings,
         decoder_embeddings,
-        decoder_lookup[SOS],
-        decoder_lookup[EOS],
+        sequence_start=decoder_lookup[SOS],
+        end_signal=decoder_lookup[EOS],
         max_length=max_length,
         dropout_p=DROPOUT,
         learning_rate=LEARNING_RATE,
@@ -164,9 +164,9 @@ if MAKE_MODEL :
             csv_writer.writerow(["Word", "Definition", "Prediction"])
             input_test_encrypted = translate(input_test, subword_lookup, use_subwords=True)
             output_test_encrypted = translate(
-                [[SOS] + nltk.tokenize.word_tokenize(o) + [EOS] for o in output_test],
+                map(to_sentence, output_test),
                 decoder_lookup,
-            )
+            )[:10]
             predictions, test_losses = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
             predictions = translate(predictions, reverse_lookup(decoder_lookup))
             for word, prediction, definition in zip(input_test, predictions, output_test) :
