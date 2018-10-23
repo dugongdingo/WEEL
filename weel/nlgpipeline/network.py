@@ -8,12 +8,11 @@ import tqdm
 import torch
 import torch.nn.functional as functional
 
-
+from ..utils import to_tensor
+from ..settings import DEVICE, MAX_LENGTH
 from .preprocess import SOS, EOS
 
-device = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MAX_LENGTH = 100
 
 class EncoderRNN(torch.nn.Module):
     def __init__(
@@ -35,7 +34,7 @@ class EncoderRNN(torch.nn.Module):
         return output, hidden
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
+        return torch.zeros(1, 1, self.hidden_size, device=DEVICE)
 
 
 class AttnDecoderRNN(torch.nn.Module):
@@ -82,7 +81,7 @@ class AttnDecoderRNN(torch.nn.Module):
         return output, hidden, attn_weights
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
+        return torch.zeros(1, 1, self.hidden_size, device=DEVICE)
 
 class Seq2SeqModel() :
     def __init__(
@@ -104,7 +103,7 @@ class Seq2SeqModel() :
             hidden_size,
             encoder_vocab.embedding_matrix,
             retrain=retrain
-        ).to(device)
+        ).to(DEVICE)
         self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=learning_rate)
         self.encoder_vocab = encoder_vocab
         self.decoder = AttnDecoderRNN(
@@ -113,7 +112,7 @@ class Seq2SeqModel() :
             decoder_vocab.embedding_matrix,
             dropout_p=dropout_p,
             max_length=max_length
-        ).to(device)
+        ).to(DEVICE)
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=learning_rate)
         self.decoder_vocab = decoder_vocab
         self.criterion = criterion
@@ -129,7 +128,7 @@ class Seq2SeqModel() :
         input_length = ipt.size(0)
         target_length = opt.size(0)
 
-        encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=device)
+        encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=DEVICE)
 
         loss = 0
 
@@ -137,7 +136,7 @@ class Seq2SeqModel() :
             encoder_output, encoder_hidden = self.encoder(ipt[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 
-        decoder_input = torch.tensor([self.sos], device=device)
+        decoder_input = torch.tensor([self.sos], device=DEVICE)
 
         decoder_hidden = encoder_hidden
 
@@ -177,8 +176,8 @@ class Seq2SeqModel() :
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
             for input_tensor, target_tensor in zip(
-                map(Seq2SeqModel.to_tensor, ipts),
-                map(Seq2SeqModel.to_tensor, opts)
+                (to_tensor(i) for i in ipts),
+                (to_tensor(o) for o in opts),
                 ) :
                 losses.append(self._train_one(input_tensor, target_tensor))
                 pbar.update(1)
@@ -187,18 +186,18 @@ class Seq2SeqModel() :
     def run(self, input, opt):
         with torch.no_grad():
             loss = 0
-            input_tensor = Seq2SeqModel.to_tensor(input)
-            opt = Seq2SeqModel.to_tensor(opt)
+            input_tensor = to_tensor(input)
+            opt = to_tensor(opt)
             input_length = input_tensor.size()[0]
             encoder_hidden = self.encoder.initHidden()
 
-            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=device)
+            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=DEVICE)
 
             for ei in range(input_length):
                 encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
                 encoder_outputs[ei] += encoder_output[0, 0]
 
-            decoder_input = torch.tensor([self.sos], device=device)  # SOS
+            decoder_input = torch.tensor([self.sos], device=DEVICE)  # SOS
 
             decoder_hidden = encoder_hidden
 
@@ -219,7 +218,3 @@ class Seq2SeqModel() :
                 decoder_input = topi.squeeze().detach()
 
             return decoded_words, loss.item() / opt.size(0)
-
-    @staticmethod
-    def to_tensor(seq) :
-        return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)

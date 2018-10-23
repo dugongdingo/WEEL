@@ -1,4 +1,3 @@
-import argparse
 import collections
 import csv
 import datetime
@@ -8,33 +7,13 @@ import pickle
 import random
 import shutil
 
+from .utils import print_now
 from .nlgpipeline.preprocess import from_file, Vocab, FastTextVocab, FastTextSubWordVocab, EOS, SOS
 from .nlgpipeline.network import Seq2SeqModel
 
 #TODO: transfer settings & prefixes computation to settings.py
 
-def print_now(*line) :
-    """
-    utility function: prepend timestamp to std output
-    """
-    print(datetime.datetime.now(), ":", *line)
-
 from .settings import *
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-d", "--dropout", type=float, default=0)
-parser.add_argument("-l", "--learningrate", type=float, default=0)
-parser.add_argument("-e", "--epochs", type=int, default=0)
-parser.add_argument("-r", "--retrain", action="store_true", default=None)
-args = parser.parse_args()
-
-DROPOUT = args.dropout or DROPOUT
-
-LEARNING_RATE = args.learningrate or LEARNING_RATE
-
-EPOCHS = args.epochs or EPOCHS
-
-RETRAIN = args.retrain or RETRAIN
 
 if USE_WIKI :
     from .datareader.wiki_reader import export

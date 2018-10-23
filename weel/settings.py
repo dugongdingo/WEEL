@@ -4,8 +4,10 @@ file listing all settings:
     - data parameters (wiki vs. wordnet, ambiguous entries, keeping examples)
     - neural model parameters (learning rate, dropout, nnumber of epochs)
 """
-
+import argparse
 import os
+
+import torch
 
 USE_WIKI = False
 
@@ -34,3 +36,22 @@ EPOCHS = 10
 RETRAIN = False
 
 USE_DEV = True
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-d", "--dropout", type=float, default=0)
+parser.add_argument("-l", "--learningrate", type=float, default=0)
+parser.add_argument("-e", "--epochs", type=int, default=0)
+parser.add_argument("-r", "--retrain", action="store_true", default=None)
+args = parser.parse_args()
+
+DROPOUT = args.dropout or DROPOUT
+
+LEARNING_RATE = args.learningrate or LEARNING_RATE
+
+EPOCHS = args.epochs or EPOCHS
+
+RETRAIN = args.retrain or RETRAIN
+
+DEVICE = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+MAX_LENGTH = 100
