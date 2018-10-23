@@ -12,19 +12,12 @@ from ..utils import to_tensor
 from ..settings import DEVICE, MAX_LENGTH
 
 class EncoderParams():
-    def __init__(self,
-        hidden_size=None,
-        retrain=False,
-    ):
+    def __init__(self,hidden_size=None,retrain=False,):
         self.hidden_size = hidden_size
         self.retrain = retrain
 
 class EncoderRNN(torch.nn.Module):
-    def __init__(
-        self,
-        fasttext_embeddings,
-        **params
-    ):
+    def __init__(self, fasttext_embeddings, **params):
         super(EncoderRNN, self).__init__()
         self.params = EncoderParams(**params)
 
@@ -47,13 +40,8 @@ class EncoderRNN(torch.nn.Module):
 
 
 class DecoderParams():
-    def __init__(self,
-        hidden_size=None,
-        output_size=None,
-        dropout_p=0.01,
-        max_length=MAX_LENGTH,
-        retrain=True,
-    ):
+    def __init__(self, hidden_size=None, output_size=None, dropout_p=0.01,
+        max_length=MAX_LENGTH, retrain=True,):
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.dropout_p = dropout_p
@@ -61,11 +49,7 @@ class DecoderParams():
         self.retrain = retrain
 
 class AttnDecoderRNN(torch.nn.Module):
-    def __init__(
-        self,
-        fasttext_embeddings,
-        **params
-    ):
+    def __init__(self,fasttext_embeddings,**params):
         super(AttnDecoderRNN, self).__init__()
         self.params = DecoderParams(**params)
 
@@ -73,57 +57,37 @@ class AttnDecoderRNN(torch.nn.Module):
         self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
         self.embedding.requires_grad = self.params.retrain
 
-        self.attn = torch.nn.Linear(
-            fasttext_embeddings.shape[1] + self.params.hidden_size,
-            self.params.max_length
-        )
-        self.attn_combine = torch.nn.Linear(
-            fasttext_embeddings.shape[1] + self.params.hidden_size,
-            self.params.hidden_size
-        )
+        attention_size = fasttext_embeddings.shape[1] + self.params.hidden_size
+        self.attn = torch.nn.Linear(attention_size, self.params.max_length)
+        self.attn_combine = torch.nn.Linear(attention_size, self.params.hidden_size)
 
         self.dropout = torch.nn.Dropout(self.params.dropout_p)
 
-        self.gru = torch.nn.GRU(
-            self.params.hidden_size,
-            self.params.hidden_size
-        )
+        self.gru = torch.nn.GRU(self.params.hidden_size, self.params.hidden_size)
 
-        self.out = torch.nn.Linear(
-            self.params.hidden_size,
-            self.params.output_size
-        )
+        self.out = torch.nn.Linear(self.params.hidden_size, self.params.output_size)
 
     def forward(self, input, hidden, encoder_outputs):
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
 
-        attn_weights = functional.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
-        attn_applied = torch.bmm(attn_weights.unsqueeze(0),
-                                 encoder_outputs.unsqueeze(0))
+        attn_weights = functional.softmax(self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
+        attn_applied = torch.bmm(attn_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
 
         output = torch.cat((embedded[0], attn_applied[0]), 1)
         output = self.attn_combine(output).unsqueeze(0)
 
         output = functional.relu(output)
         output, hidden = self.gru(output, hidden)
-
         output = functional.log_softmax(self.out(output[0]), dim=1)
+
         return output, hidden, attn_weights
 
     def initHidden(self):
         return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
 
 class Seq2SeqParams():
-    def __init__(
-        self,
-        learning_rate=0.001,
-        sequence_start=None,
-        end_signal=None,
-        teacher_forcing_ratio=0.5,
-        max_length = MAX_LENGTH,
-    ):
+    def __init__(self, learning_rate=0.001, sequence_start=None, end_signal=None, teacher_forcing_ratio=0.5, max_length = MAX_LENGTH,):
         self.learning_rate=learning_rate
         self.sequence_start = sequence_start
         self.end_signal = end_signal
@@ -169,16 +133,14 @@ class Seq2SeqModel() :
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
             for di in range(target_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                 loss += self.criterion(decoder_output, opt[di])
                 decoder_input = opt[di]  # Teacher forcing
 
         else:
             # Without teacher forcing: use its own predictions as the next input
             for di in range(target_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                 topv, topi = decoder_output.topk(1)
                 decoder_input = topi.squeeze().detach()  # detach from history as input
 
@@ -229,8 +191,7 @@ class Seq2SeqModel() :
             decoder_attentions = torch.zeros(self.params.max_length, self.params.max_length)
 
             for di in range(self.params.max_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                 decoder_attentions[di] = decoder_attention.data
                 topv, topi = decoder_output.data.topk(1)
                 decoded_words.append(topi.item())
