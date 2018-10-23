@@ -29,7 +29,7 @@ KEEP_EXAMPLES = False
 
 LEARNING_RATE = 0.001
 
-DROPOUT = 0.1
+DROPOUT = 0.01
 
 EPOCHS = 10
 
@@ -38,9 +38,9 @@ RETRAIN = False
 USE_DEV = True
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-d", "--dropout", type=float, default=0)
-parser.add_argument("-l", "--learningrate", type=float, default=0)
-parser.add_argument("-e", "--epochs", type=int, default=0)
+parser.add_argument("-d", "--dropout", type=float, default=0.)
+parser.add_argument("-l", "--learningrate", type=float, default=0.)
+parser.add_argument("-e", "--epochs", type=int, default=0.)
 parser.add_argument("-r", "--retrain", action="store_true", default=None)
 args = parser.parse_args()
 
@@ -55,3 +55,5 @@ RETRAIN = args.retrain or RETRAIN
 DEVICE = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MAX_LENGTH = 100
+
+MAKE_MODEL = True

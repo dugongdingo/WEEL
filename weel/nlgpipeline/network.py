@@ -12,21 +12,31 @@ from ..utils import to_tensor
 from ..settings import DEVICE, MAX_LENGTH
 from .preprocess import SOS, EOS
 
-
+class EncoderParams():
+    def __init__(self,
+        hidden_size=None,
+        retrain=False,
+    ):
+        self.hidden_size = hidden_size
+        self.retrain = retrain
 
 class EncoderRNN(torch.nn.Module):
     def __init__(
         self,
-        hidden_size,
         fasttext_embeddings,
-        retrain=False,
+        **params
     ):
         super(EncoderRNN, self).__init__()
-        self.hidden_size = hidden_size
+        self.params = EncoderParams(**params)
+
         self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
         self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
-        self.embedding.requires_grad = retrain
-        self.gru = torch.nn.GRU(fasttext_embeddings.shape[1], hidden_size)
+        self.embedding.requires_grad = self.params.retrain
+
+        self.gru = torch.nn.GRU(
+            fasttext_embeddings.shape[1],
+            self.params.hidden_size
+        )
 
     def forward(self, input, hidden):
         output = self.embedding(input).view(1, 1, -1)
@@ -34,33 +44,56 @@ class EncoderRNN(torch.nn.Module):
         return output, hidden
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=DEVICE)
+        return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
 
 
-class AttnDecoderRNN(torch.nn.Module):
-    def __init__(
-        self,
-        hidden_size,
-        output_size,
-        fasttext_embeddings,
-        retrain=True,
-        dropout_p=0.1,
+class DecoderParams():
+    def __init__(self,
+        hidden_size=None,
+        output_size=None,
+        dropout_p=0.01,
         max_length=MAX_LENGTH,
+        retrain=True,
     ):
-        super(AttnDecoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.dropout_p = dropout_p
         self.max_length = max_length
+        self.retrain = retrain
+
+class AttnDecoderRNN(torch.nn.Module):
+    def __init__(
+        self,
+        fasttext_embeddings,
+        **params
+    ):
+        super(AttnDecoderRNN, self).__init__()
+        self.params = DecoderParams(**params)
 
         self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
         self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
-        self.embedding.requires_grad = retrain
-        self.attn = torch.nn.Linear(fasttext_embeddings.shape[1] + self.hidden_size, self.max_length)
-        self.attn_combine = torch.nn.Linear(fasttext_embeddings.shape[1] + self.hidden_size, self.hidden_size)
-        self.dropout = torch.nn.Dropout(self.dropout_p)
-        self.gru = torch.nn.GRU(self.hidden_size, self.hidden_size)
-        self.out = torch.nn.Linear(self.hidden_size, self.output_size)
+        self.embedding.requires_grad = self.params.retrain
+
+        self.attn = torch.nn.Linear(
+            fasttext_embeddings.shape[1] + self.params.hidden_size,
+            self.params.max_length
+        )
+        self.attn_combine = torch.nn.Linear(
+            fasttext_embeddings.shape[1] + self.params.hidden_size,
+            self.params.hidden_size
+        )
+
+        self.dropout = torch.nn.Dropout(self.params.dropout_p)
+
+        self.gru = torch.nn.GRU(
+            self.params.hidden_size,
+            self.params.hidden_size
+        )
+
+        self.out = torch.nn.Linear(
+            self.params.hidden_size,
+            self.params.output_size
+        )
 
     def forward(self, input, hidden, encoder_outputs):
         embedded = self.embedding(input).view(1, 1, -1)
@@ -81,15 +114,17 @@ class AttnDecoderRNN(torch.nn.Module):
         return output, hidden, attn_weights
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=DEVICE)
+        return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
 
 class Seq2SeqModel() :
     def __init__(
             self,
             hidden_size,
             output_size,
-            encoder_vocab,
-            decoder_vocab,
+            encoder_embeddings,
+            decoder_embeddings,
+            eos,
+            sos,
             dropout_p=0.1,
             max_length=MAX_LENGTH,
             teacher_forcing_ratio=0.5,
@@ -100,24 +135,22 @@ class Seq2SeqModel() :
         self.max_length = max_length
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.encoder = EncoderRNN(
-            hidden_size,
-            encoder_vocab.embedding_matrix,
+            encoder_embeddings,
+            hidden_size=hidden_size,
             retrain=retrain
         ).to(DEVICE)
         self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=learning_rate)
-        self.encoder_vocab = encoder_vocab
         self.decoder = AttnDecoderRNN(
-            hidden_size,
-            output_size,
-            decoder_vocab.embedding_matrix,
+            decoder_embeddings,
+            hidden_size=hidden_size,
+            output_size=output_size,
             dropout_p=dropout_p,
             max_length=max_length
         ).to(DEVICE)
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=learning_rate)
-        self.decoder_vocab = decoder_vocab
         self.criterion = criterion
-        self.sos = self.decoder_vocab.encrypt((SOS,))
-        self.eos = self.decoder_vocab.lookup[EOS]
+        self.sequence_start = sos
+        self.end_signal = eos
 
     def _train_one(self, ipt, opt):
         encoder_hidden = self.encoder.initHidden()
@@ -128,7 +161,7 @@ class Seq2SeqModel() :
         input_length = ipt.size(0)
         target_length = opt.size(0)
 
-        encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=DEVICE)
+        encoder_outputs = torch.zeros(self.max_length, self.encoder.params.hidden_size, device=DEVICE)
 
         loss = 0
 
@@ -136,7 +169,7 @@ class Seq2SeqModel() :
             encoder_output, encoder_hidden = self.encoder(ipt[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 
-        decoder_input = torch.tensor([self.sos], device=DEVICE)
+        decoder_input = torch.tensor([self.sequence_start], device=DEVICE)
 
         decoder_hidden = encoder_hidden
 
@@ -159,7 +192,7 @@ class Seq2SeqModel() :
                 decoder_input = topi.squeeze().detach()  # detach from history as input
 
                 loss += self.criterion(decoder_output, opt[di])
-                if decoder_input.item() == self.eos:
+                if decoder_input.item() == self.end_signal:
                     break
 
         loss.backward()
@@ -178,7 +211,7 @@ class Seq2SeqModel() :
             for input_tensor, target_tensor in zip(
                 (to_tensor(i) for i in ipts),
                 (to_tensor(o) for o in opts),
-                ) :
+            ) :
                 losses.append(self._train_one(input_tensor, target_tensor))
                 pbar.update(1)
         return losses
@@ -191,13 +224,13 @@ class Seq2SeqModel() :
             input_length = input_tensor.size()[0]
             encoder_hidden = self.encoder.initHidden()
 
-            encoder_outputs = torch.zeros(self.max_length, self.encoder.hidden_size, device=DEVICE)
+            encoder_outputs = torch.zeros(self.max_length, self.encoder.params.hidden_size, device=DEVICE)
 
             for ei in range(input_length):
                 encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
                 encoder_outputs[ei] += encoder_output[0, 0]
 
-            decoder_input = torch.tensor([self.sos], device=DEVICE)  # SOS
+            decoder_input = torch.tensor([self.sequence_start], device=DEVICE)  # SOS
 
             decoder_hidden = encoder_hidden
 
@@ -212,7 +245,7 @@ class Seq2SeqModel() :
                 decoded_words.append(topi.item())
                 if di < opt.size(0) :
                     loss += self.criterion(decoder_output, opt[di])
-                if topi.item() == self.eos:
+                if topi.item() == self.end_signal:
                     break
 
                 decoder_input = topi.squeeze().detach()

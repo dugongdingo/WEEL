@@ -7,8 +7,8 @@ import pickle
 import random
 import shutil
 
-from .utils import print_now
-from .nlgpipeline.preprocess import from_file, Vocab, FastTextVocab, FastTextSubWordVocab, EOS, SOS
+from .utils import print_now, read_parsed_data_file, data_to_file, data_from_file
+from .nlgpipeline.preprocess import EOS, SOS, compute_lookup, translate, reverse_lookup
 from .nlgpipeline.network import Seq2SeqModel
 
 #TODO: transfer settings & prefixes computation to settings.py
@@ -62,7 +62,7 @@ else :
         print_now("retrieving data...")
         export(extraction_path + ".raw", unambiguous=NO_AMBIG, with_example=KEEP_EXAMPLES, keep_mwe=not NO_MWE)
         print_now("selecting data %s..." % extraction_prefix)
-        data = list(from_file(extraction_path + ".raw"))
+        data = list(read_parsed_data_file(extraction_path + ".raw"))
         random.shuffle(data)
         words, definitions = zip(*data)
         proportion_train = int(8 * len(words) /10)
@@ -70,22 +70,26 @@ else :
         input_train, output_train = words[:proportion_train], definitions[:proportion_train]
         input_dev, output_dev = words[proportion_train:proportion_dev], definitions[proportion_train:proportion_dev]
         input_test, output_test = words[proportion_dev:], definitions[proportion_dev:]
-        def data_to_file(input_data, output_data, path):
-            with open(path, "w") as ostr :
-                csv_ostr = csv.writer(ostr)
-                csv_ostr.writerow(["input", "output"])
-                for record in zip(input_data, output_data) :
-                    csv_ostr.writerow(record)
-        data_to_file(input_test, output_test, os.path.join(extraction_path, "test.csv"))
-        data_to_file(input_dev, output_dev, os.path.join(extraction_path, "dev.csv"))
-        data_to_file(input_train, output_train, os.path.join(extraction_path, "train.csv"))
+
+        header = ["input", "output"]
+        data_to_file(
+            header,
+            zip(input_test, output_test),
+            os.path.join(extraction_path, "test.csv")
+        )
+        data_to_file(
+            header,
+            zip(input_dev, output_dev),
+            os.path.join(extraction_path, "dev.csv")
+        )
+        data_to_file(
+            header,
+            zip(input_train, output_train),
+            os.path.join(extraction_path, "train.csv")
+        )
     else:
         print_now("selecting data %s..." % extraction_prefix)
-        def data_from_file(path):
-            with open(path, "r") as istr:
-                istr.readline()
-                csv_istr = csv.reader(istr)
-                return zip(*(row for row in csv_istr))
+
         input_test, output_test = data_from_file(os.path.join(extraction_path, "test.csv"))
         input_dev, output_dev = data_from_file(os.path.join(extraction_path, "dev.csv"))
         input_train, output_train = data_from_file(os.path.join(extraction_path, "train.csv"))
@@ -103,27 +107,32 @@ else :
     output_rest = output_dev
 
 # MODEL GENERATION
-make_model = True
 model = None
 if not os.path.isdir(MODELS_STORAGE) :
     os.makedirs(MODELS_STORAGE)
-    make_model = True
-make_model = make_model or not os.path.isfile(model_path)
+    MAKE_MODEL = True
+MAKE_MODEL = MAKE_MODEL or not os.path.isfile(model_path)
 
-if make_model :
+if MAKE_MODEL :
     print_now("building model %s..." % param_prefix)
-    enc_voc = FastTextSubWordVocab(PATH_TO_FASTTEXT)
-    enc_voc.encrypt_all(input_train + input_test + input_rest, compute=True)
-    input_train = enc_voc.encrypt_all(input_train)
-    dec_voc = FastTextVocab(PATH_TO_FASTTEXT)
-    dec_voc.encrypt_all(map(nltk.tokenize.word_tokenize, output_train + output_test + output_rest), compute=True)
-    output_train = dec_voc.encrypt_all(map(nltk.tokenize.word_tokenize, output_train))
+    input_all = input_train + input_test + input_rest
+    subword_lookup, subword_embeddings = compute_lookup(input_all, PATH_TO_FASTTEXT, use_subwords=True)
+    input_train = translate(input_train, subword_lookup, use_subwords=True)
+    output_all = list(map(nltk.tokenize.word_tokenize, output_train + output_test + output_rest))
+    decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT)
+    output_train = translate(
+        [[SOS] + nltk.tokenize.word_tokenize(o) + [EOS] for o in output_train],
+        decoder_lookup,
+    )
+
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
     model = Seq2SeqModel(
         256,
-        len(dec_voc),
-        enc_voc,
-        dec_voc,
+        len(decoder_lookup),
+        subword_embeddings,
+        decoder_embeddings,
+        decoder_lookup[SOS],
+        decoder_lookup[EOS],
         max_length=max_length,
         dropout_p=DROPOUT,
         learning_rate=LEARNING_RATE,
@@ -153,11 +162,13 @@ if make_model :
         with open(test_result_path, "w") as ostr:
             csv_writer = csv.writer(ostr)
             csv_writer.writerow(["Word", "Definition", "Prediction"])
-            input_test_encrypted = model.encoder_vocab.encrypt_all(input_test)
-            output_test_encrypted = [[SOS] + nltk.tokenize.word_tokenize(s) + [EOS] for s in output_test]
-            output_test_encrypted = model.decoder_vocab.encrypt_all(output_test_encrypted)
+            input_test_encrypted = translate(input_test, subword_lookup, use_subwords=True)
+            output_test_encrypted = translate(
+                [[SOS] + nltk.tokenize.word_tokenize(o) + [EOS] for o in output_test],
+                decoder_lookup,
+            )
             predictions, test_losses = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
-            predictions = model.decoder_vocab.decrypt_all(predictions)
+            predictions = translate(predictions, reverse_lookup(decoder_lookup))
             for word, prediction, definition in zip(input_test, predictions, output_test) :
                 csv_writer.writerow([word, definition, prediction])
         print_now(
