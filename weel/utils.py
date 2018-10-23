@@ -1,23 +1,36 @@
 import csv
 import datetime
 
+import numpy
 import nltk.tokenize
 import torch
 
 from .settings import DEVICE
-from .nlgpipeline.lookup import EOS, SOS
+
+SOS = "<SOS>"
+
+EOS = "<EOS>"
+
+OOV = "<OOV>"
 
 def to_tensor(seq, device=DEVICE) :
     return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
 
+
 def to_sentence(raw_str):
     return [SOS] + nltk.tokenize.word_tokenize(raw_str) + [EOS]
+
+
+def random_vector(nb_dims):
+     return numpy.random.rand(nb_dims)
+
 
 def print_now(*line) :
     """
     utility function: prepend timestamp to std output
     """
     print(datetime.datetime.now(), ":", *line)
+
 
 def read_parsed_data_file(datafile) :
     """
@@ -36,6 +49,7 @@ def data_to_file(header, data, path):
         csv_ostr.writerow(header)
         for record in data :
             csv_ostr.writerow(record)
+
 
 def data_from_file(path, with_header=True):
     with open(path, "r") as istr:

@@ -6,19 +6,17 @@ import numpy
 
 import fastText
 
+from ..utils import random_vector, EOS, SOS, OOV
+
 # start of sentence & end of sentence tokens
-SOS = "<SOS>"
 
-EOS = "<EOS>"
-
-OOV = "<OOV>"
 
 
 def compute_lookup(sequences, fastText_path, use_subwords=False):
     lookup = {}
-    embedding_matrix = None
 
     model = fastText.load_model(fastText_path)
+    nb_dims = model.get_dimension()
 
     if use_subwords :
         vecs = {}
@@ -28,7 +26,7 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
             for w, idx in  zip(ngrams, subindices) :
                 if w not in vecs :
                     vecs[w] = model.get_input_vector(idx)
-        embedding_matrix = numpy.zeros((len(vecs),model.get_dimension()))
+        embedding_matrix = numpy.zeros((len(vecs),nb_dims))
         del model
         tmp_lookup = {}
         for i, subword in enumerate({s for w in lookup for s in lookup[w]}) :
@@ -47,10 +45,10 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
             for w in s
         }
         if not EOS in vecs:
-            vecs[EOS] = numpy.random.rand(model.get_dimension())
+            vecs[EOS] = random_vector(nb_dims)
         if not SOS in vecs:
-            vecs[SOS] = numpy.random.rand(model.get_dimension())
-        embedding_matrix = numpy.zeros((len(vecs), model.get_dimension()))
+            vecs[SOS] = random_vector(nb_dims)
+        embedding_matrix = numpy.zeros((len(vecs), nb_dims))
         del model
         for i, s in enumerate(vecs) :
             embedding_matrix[i,:] = vecs[s]

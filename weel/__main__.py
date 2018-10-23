@@ -7,13 +7,13 @@ import pickle
 import random
 import shutil
 
-from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file
-from .nlgpipeline.lookup import EOS, SOS, compute_lookup, translate, reverse_lookup
+from .settings import *
+from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file, EOS, SOS
+from .nlgpipeline.lookup import compute_lookup, translate, reverse_lookup
 from .nlgpipeline.network import Seq2SeqModel
 
 #TODO: transfer settings & prefixes computation to settings.py
 
-from .settings import *
 
 if USE_WIKI :
     from .datareader.wiki_reader import export
