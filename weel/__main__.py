@@ -142,7 +142,7 @@ if MAKE_MODEL :
     for epoch in map(str, range(1, EPOCHS + 1)):
         data = list(zip(input_train, output_train))
         random.shuffle(data)
-        input_train, output_train = zip(*data[:10])
+        input_train, output_train = zip(*data)
         train_losses = model.train(input_train, output_train, epoch_number=epoch)
 
         param_prefix = "lr" + str(LEARNING_RATE) +\
@@ -166,7 +166,7 @@ if MAKE_MODEL :
             output_test_encrypted = translate(
                 map(to_sentence, output_test),
                 decoder_lookup,
-            )[:10]
+            )
             predictions, test_losses = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
             predictions = translate(predictions, reverse_lookup(decoder_lookup))
             for word, prediction, definition in zip(input_test, predictions, output_test) :
