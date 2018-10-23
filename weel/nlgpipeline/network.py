@@ -10,7 +10,6 @@ import torch.nn.functional as functional
 
 from ..utils import to_tensor
 from ..settings import DEVICE, MAX_LENGTH
-from .preprocess import SOS, EOS
 
 class EncoderParams():
     def __init__(self,
@@ -230,7 +229,7 @@ class Seq2SeqModel() :
                 encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
                 encoder_outputs[ei] += encoder_output[0, 0]
 
-            decoder_input = torch.tensor([self.sequence_start], device=DEVICE)  # SOS
+            decoder_input = torch.tensor([self.sequence_start], device=DEVICE)
 
             decoder_hidden = encoder_hidden
 

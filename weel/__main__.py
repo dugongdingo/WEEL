@@ -8,7 +8,7 @@ import random
 import shutil
 
 from .utils import print_now, read_parsed_data_file, data_to_file, data_from_file
-from .nlgpipeline.preprocess import EOS, SOS, compute_lookup, translate, reverse_lookup
+from .nlgpipeline.lookup import EOS, SOS, compute_lookup, translate, reverse_lookup
 from .nlgpipeline.network import Seq2SeqModel
 
 #TODO: transfer settings & prefixes computation to settings.py
