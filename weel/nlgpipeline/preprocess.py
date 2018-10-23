@@ -221,7 +221,8 @@ class FastTextVocab :
         return self.embedding_matrix.shape[0]
 
     def decrypt(self, sequence):
+        print(sequence)
         return [self.rlookup[i] for i in sequence]
 
     def decrypt_all(self, sequences) :
-        return [decrypt(s) for s in sequences]
+        return [self.decrypt(s) for s in sequences]

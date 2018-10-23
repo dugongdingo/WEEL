@@ -154,7 +154,7 @@ if make_model :
     for epoch in map(str, range(1, EPOCHS + 1)):
         data = list(zip(input_train, output_train))
         random.shuffle(data)
-        input_train, output_train = zip(*data)
+        input_train, output_train = zip(*data[:10])
         train_losses = model.train(input_train, output_train, epoch_number=epoch)
 
         param_prefix = "lr" + str(LEARNING_RATE) +\
@@ -175,10 +175,12 @@ if make_model :
             csv_writer = csv.writer(ostr)
             csv_writer.writerow(["Word", "Definition", "Prediction"])
             input_test_encrypted = model.encoder_vocab.encrypt_all(input_test)
-            predictions = model.decoder_vocab.decrypt_all(map(model.run, input_test_encrypted))
-            for word, (prediction, loss), definition in zip(input_test, predictions, output_test) :
+            output_test_encrypted = [[SOS] + nltk.tokenize.word_tokenize(s) + [EOS] for s in output_test]
+            output_test_encrypted = model.decoder_vocab.encrypt_all(output_test_encrypted)
+            predictions, test_losses = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
+            predictions = model.decoder_vocab.decrypt_all(predictions)
+            for word, prediction, definition in zip(input_test, predictions, output_test) :
                 csv_writer.writerow([word, definition, prediction])
-                test_losses.append(loss/ len(list(map(nltk.tokenize.word_tokenize, definition))))
         print_now(
             "avg loss train:",
             sum(train_losses)/len(train_losses),

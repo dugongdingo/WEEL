@@ -184,10 +184,11 @@ class Seq2SeqModel() :
                 pbar.update(1)
         return losses
 
-    def run(self, input):
+    def run(self, input, opt):
         with torch.no_grad():
             loss = 0
             input_tensor = Seq2SeqModel.to_tensor(input)
+            opt = Seq2SeqModel.to_tensor(opt)
             input_length = input_tensor.size()[0]
             encoder_hidden = self.encoder.initHidden()
 
@@ -210,13 +211,14 @@ class Seq2SeqModel() :
                 decoder_attentions[di] = decoder_attention.data
                 topv, topi = decoder_output.data.topk(1)
                 decoded_words.append(topi.item())
-                loss += self.criterion(decoder_output, opt[di])
+                if di < opt.size(0) :
+                    loss += self.criterion(decoder_output, opt[di])
                 if topi.item() == self.eos:
                     break
 
                 decoder_input = topi.squeeze().detach()
 
-            return decoded_words, loss.item()
+            return decoded_words, loss.item() / opt.size(0)
 
     @staticmethod
     def to_tensor(seq) :
