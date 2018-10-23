@@ -37,6 +37,8 @@ RETRAIN = False
 
 USE_DEV = True
 
+HIDDEN_SIZE = 256
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--dropout", type=float, default=0.)
 parser.add_argument("-l", "--learningrate", type=float, default=0.)

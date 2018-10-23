@@ -10,7 +10,7 @@ import shutil
 from .settings import *
 from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file, EOS, SOS
 from .nlgpipeline.lookup import compute_lookup, translate, reverse_lookup
-from .nlgpipeline.network import Seq2SeqModel
+from .nlgpipeline.network import Seq2SeqModel, EncoderRNN, AttnDecoderRNN
 
 #TODO: transfer settings & prefixes computation to settings.py
 
@@ -126,17 +126,28 @@ if MAKE_MODEL :
     )
 
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
-    model = Seq2SeqModel(
-        256,
-        len(decoder_lookup),
+
+    encoder = EncoderRNN(
         subword_embeddings,
+        hidden_size=HIDDEN_SIZE,
+        retrain=RETRAIN
+    ).to(DEVICE)
+
+    decoder = AttnDecoderRNN(
         decoder_embeddings,
+        hidden_size=HIDDEN_SIZE,
+        output_size=len(decoder_lookup),
+        dropout_p=DROPOUT,
+        max_length=max_length,
+    ).to(DEVICE)
+
+    model = Seq2SeqModel(
+        encoder,
+        decoder,
         sequence_start=decoder_lookup[SOS],
         end_signal=decoder_lookup[EOS],
         max_length=max_length,
-        dropout_p=DROPOUT,
         learning_rate=LEARNING_RATE,
-        retrain=RETRAIN,
     )
     print_now("training model %s..." % param_prefix)
     for epoch in map(str, range(1, EPOCHS + 1)):

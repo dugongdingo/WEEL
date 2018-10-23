@@ -115,41 +115,33 @@ class AttnDecoderRNN(torch.nn.Module):
     def initHidden(self):
         return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
 
-class Seq2SeqModel() :
+class Seq2SeqParams():
     def __init__(
-            self,
-            hidden_size,
-            output_size,
-            encoder_embeddings,
-            decoder_embeddings,
-            sequence_start=None,
-            end_signal=None,
-            dropout_p=0.1,
-            max_length=MAX_LENGTH,
-            teacher_forcing_ratio=0.5,
-            learning_rate=0.001,
-            retrain=False,
-            criterion=torch.nn.NLLLoss()
-    ) :
-        self.max_length = max_length
-        self.teacher_forcing_ratio = teacher_forcing_ratio
-        self.encoder = EncoderRNN(
-            encoder_embeddings,
-            hidden_size=hidden_size,
-            retrain=retrain
-        ).to(DEVICE)
-        self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=learning_rate)
-        self.decoder = AttnDecoderRNN(
-            decoder_embeddings,
-            hidden_size=hidden_size,
-            output_size=output_size,
-            dropout_p=dropout_p,
-            max_length=max_length
-        ).to(DEVICE)
-        self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=learning_rate)
-        self.criterion = criterion
+        self,
+        learning_rate=0.001,
+        sequence_start=None,
+        end_signal=None,
+        teacher_forcing_ratio=0.5,
+        max_length = MAX_LENGTH,
+    ):
+        self.learning_rate=learning_rate
         self.sequence_start = sequence_start
         self.end_signal = end_signal
+        self.teacher_forcing_ratio = teacher_forcing_ratio
+        self.max_length = max_length
+
+
+class Seq2SeqModel() :
+    def __init__(self, encoder, decoder, **params) :
+        self.params = Seq2SeqParams(**params)
+
+        self.encoder = encoder
+        self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=self.params.learning_rate)
+
+        self.decoder = decoder
+        self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=self.params.learning_rate)
+
+        self.criterion = torch.nn.NLLLoss()
 
     def _train_one(self, ipt, opt):
         encoder_hidden = self.encoder.initHidden()
@@ -160,19 +152,19 @@ class Seq2SeqModel() :
         input_length = ipt.size(0)
         target_length = opt.size(0)
 
-        encoder_outputs = torch.zeros(self.max_length, self.encoder.params.hidden_size, device=DEVICE)
+        encoder_outputs = torch.zeros(self.params.max_length, self.encoder.params.hidden_size, device=DEVICE)
 
         loss = 0
 
-        for ei in range(min(input_length, self.max_length)):
+        for ei in range(min(input_length, self.params.max_length)):
             encoder_output, encoder_hidden = self.encoder(ipt[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 
-        decoder_input = torch.tensor([self.sequence_start], device=DEVICE)
+        decoder_input = torch.tensor([self.params.sequence_start], device=DEVICE)
 
         decoder_hidden = encoder_hidden
 
-        use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
+        use_teacher_forcing = True if random.random() < self.params.teacher_forcing_ratio else False
 
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
@@ -191,7 +183,7 @@ class Seq2SeqModel() :
                 decoder_input = topi.squeeze().detach()  # detach from history as input
 
                 loss += self.criterion(decoder_output, opt[di])
-                if decoder_input.item() == self.end_signal:
+                if decoder_input.item() == self.params.end_signal:
                     break
 
         loss.backward()
@@ -223,20 +215,20 @@ class Seq2SeqModel() :
             input_length = input_tensor.size()[0]
             encoder_hidden = self.encoder.initHidden()
 
-            encoder_outputs = torch.zeros(self.max_length, self.encoder.params.hidden_size, device=DEVICE)
+            encoder_outputs = torch.zeros(self.params.max_length, self.encoder.params.hidden_size, device=DEVICE)
 
             for ei in range(input_length):
                 encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
                 encoder_outputs[ei] += encoder_output[0, 0]
 
-            decoder_input = torch.tensor([self.sequence_start], device=DEVICE)
+            decoder_input = torch.tensor([self.params.sequence_start], device=DEVICE)
 
             decoder_hidden = encoder_hidden
 
             decoded_words = []
-            decoder_attentions = torch.zeros(self.max_length, self.max_length)
+            decoder_attentions = torch.zeros(self.params.max_length, self.params.max_length)
 
-            for di in range(self.max_length):
+            for di in range(self.params.max_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(
                     decoder_input, decoder_hidden, encoder_outputs)
                 decoder_attentions[di] = decoder_attention.data
@@ -244,7 +236,7 @@ class Seq2SeqModel() :
                 decoded_words.append(topi.item())
                 if di < opt.size(0) :
                     loss += self.criterion(decoder_output, opt[di])
-                if topi.item() == self.end_signal:
+                if topi.item() == self.params.end_signal:
                     break
 
                 decoder_input = topi.squeeze().detach()
