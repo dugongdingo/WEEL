@@ -161,10 +161,7 @@ class Seq2SeqModel() :
         n_iters = len(ipts)
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
-            for input_tensor, target_tensor in zip(
-                (to_tensor(i) for i in ipts),
-                (to_tensor(o) for o in opts),
-            ) :
+            for input_tensor, target_tensor in zip((to_tensor(i) for i in ipts), (to_tensor(o) for o in opts)) :
                 losses.append(self._train_one(input_tensor, target_tensor))
                 pbar.update(1)
         return losses
