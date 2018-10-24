@@ -39,7 +39,7 @@ class EncoderRNN(torch.nn.Module):
         packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, input_lengths)
         outputs, hidden = self.gru(packed, hidden)
         outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(outputs)
-        outputs = outputs[:, :, :self.hidden_size] + outputs[:, : ,self.hidden_size:]
+        outputs = outputs[:, :, :self.params.hidden_size] + outputs[:, : ,self.params.hidden_size:]
         return outputs, hidden
 
     def initHidden(self):

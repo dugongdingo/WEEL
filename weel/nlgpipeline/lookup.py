@@ -3,7 +3,7 @@ import csv
 import itertools
 
 import numpy
-
+import torch
 
 import fastText
 
@@ -35,18 +35,19 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
         del model
         tmp_lookup = {}
         if add_pad :
-            lookup[PAD] = 0
             for i, subword in enumerate({s for w in lookup for s in lookup[w]}) :
                 embedding_matrix[i + 1,:] = vecs[subword]
                 tmp_lookup[subword] = i + 1
         else :
             for i, subword in enumerate({s for w in lookup for s in lookup[w]}) :
-                embedding_matrix[i + 1,:] = vecs[subword]
-                tmp_lookup[subword] = i + 1
+                embedding_matrix[i,:] = vecs[subword]
+                tmp_lookup[subword] = i
         lookup = {
             word : [tmp_lookup[s] for s in lookup[word]]
             for word in lookup
         }
+        if add_pad :
+            lookup[PAD] = 0
         return lookup, embedding_matrix
 
     else :
@@ -91,7 +92,7 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
     inputs, outputs = zip(*data)
 
     # compute lengths for packed sequences
-    inputs_lengths =  list(map(len, inputs))
+    inputs_lengths = torch.tensor(list(map(len, inputs)))
 
     # pad
     inputs = pad_all(inputs, padding_item=encoder_lookup[PAD])
