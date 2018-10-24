@@ -93,7 +93,7 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
 
     # compute lengths for packed sequences
     inputs_lengths = torch.tensor(list(map(len, inputs)))
-
+    max_target_length = max(map(len, outputs))
     # pad
     inputs = pad_all(inputs, padding_item=encoder_lookup[PAD])
     outputs = pad_all(outputs, padding_item=decoder_lookup[PAD])
@@ -105,4 +105,4 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
     inputs = to_batch_tensor(inputs)
     outputs = to_batch_tensor(outputs)
 
-    return inputs, inputs_lengths, outputs, outputs_mask
+    return inputs, inputs_lengths, outputs, outputs_mask, max_target_length

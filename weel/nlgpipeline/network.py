@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as functional
 
 from ..utils import to_tensor
-from ..settings import DEVICE, MAX_LENGTH, HIDDEN_SIZE, N_LAYERS, CLIP
+from ..settings import DEVICE, MAX_LENGTH, HIDDEN_SIZE, N_LAYERS, CLIP, BATCH_SIZE
 
 class EncoderParams():
     def __init__(self,hidden_size=HIDDEN_SIZE,retrain=False, n_layers=N_LAYERS):
@@ -167,7 +167,7 @@ class Seq2SeqModel() :
 
         self.criterion = maskNLLLoss
 
-    def _train_one(self, ipt, lengths, opt, mask, device=DEVICE, clip=CLIP):
+    def _train_one(self, ipt, lengths, opt, mask, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
         encoder_hidden = self.encoder.initHidden()
 
 
@@ -181,16 +181,15 @@ class Seq2SeqModel() :
 
         loss = 0
         n_totals = 0
+        decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
 
-        decoder_input = torch.LongTensor([[self.params.sequence_start] * opt.size(1)]).to(device)
-
-        decoder_hidden = encoder_hidden[:self.decoders.params.n_layers]
+        decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
 
         use_teacher_forcing = bool(random.random() < self.params.teacher_forcing_ratio)
 
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
-            for di in range(opt.size(0)):
+            for di in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                 decoder_input = opt[di].view(1, -1)
                 mask_loss, n_total = self.criterion(decoder_output, opt[di], mask[di])
@@ -198,10 +197,10 @@ class Seq2SeqModel() :
                 n_totals += n_total
         else:
             # Without teacher forcing: use its own predictions as the next input
-            for di in range(opt.size(0)):
+            for di in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                 _, topi = decoder_output.topk(1)
-                decoder_input = torch.LongTensor([topi[i][0] for i in range(opt.size(1))]).to(device)
+                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device)
                 mask_loss, n_total = self.criterion(decoder_output, opt[di], mask[di])
                 loss += mask_loss
                 n_totals += n_total
@@ -220,9 +219,9 @@ class Seq2SeqModel() :
         losses = []
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
-            for input_tensor, lengths, target_tensor, mask in batches :
-                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask))
-                pbar.update(1)
+            for input_tensor, lengths, target_tensor, mask, max_target_length in batches :
+                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask, max_target_length))
+                pbar.update(chunk_size)
         return losses
 
     def run(self, input, opt):
