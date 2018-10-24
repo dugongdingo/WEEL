@@ -149,8 +149,16 @@ if MAKE_MODEL :
     for epoch in map(str, range(1, EPOCHS + 1)):
         data = list(zip(input_train, output_train))
         random.shuffle(data)
-        batches = (make_batch(ipts, opts, subword_lookup, decoder_lookup) for ipts, opts in to_chunks(data))
-        train_losses = model.train(batches, epoch_number=epoch)
+
+        batches = (
+            make_batch(ipts, opts, subword_lookup, decoder_lookup)
+            for ipts, opts in (
+                zip(*chunk)
+                for chunk in to_chunks(data)
+            )
+        )
+
+        train_losses = model.train(batches, len(input_train), BATCH_SIZE, epoch_number=epoch)
 
         param_prefix = "lr" + str(LEARNING_RATE) +\
             "_d" + str(DROPOUT) +\

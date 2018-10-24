@@ -59,7 +59,7 @@ class DecoderParams():
 
 class AttentionLayer(torch.nn.Module):
     def __init__(self, method, hidden_size):
-        super(Attn, self).__init__()
+        super(AttentionLayer, self).__init__()
         self.method = method
         if self.method not in ['dot', 'general', 'concat']:
             raise ValueError()
@@ -216,9 +216,8 @@ class Seq2SeqModel() :
 
         return loss.item() / n_totals
 
-    def train(self, batches, epoch_number=None) :
+    def train(self, batches, n_iters, chunk_size, epoch_number=None) :
         losses = []
-        n_iters = len(ipts)
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
             for input_tensor, lengths, target_tensor, mask in batches :

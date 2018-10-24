@@ -20,6 +20,7 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
     nb_dims = model.get_dimension()
 
     if use_subwords :
+        add_pad = False
         vecs = {}
         for word in sequences :
             ngrams, subindices = model.get_subwords(word)
@@ -28,13 +29,20 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
                 if w not in vecs :
                     vecs[w] = model.get_input_vector(idx)
         if not PAD in vecs:
-            vecs[PAD] = numpy.zeros((nb_dims,))
+            vecs[PAD] = None
+            add_pad = True
         embedding_matrix = numpy.zeros((len(vecs),nb_dims))
         del model
         tmp_lookup = {}
-        for i, subword in enumerate({s for w in lookup for s in lookup[w]}) :
-            embedding_matrix[i,:] = vecs[subword]
-            tmp_lookup[subword] = i
+        if add_pad :
+            lookup[PAD] = 0
+            for i, subword in enumerate({s for w in lookup for s in lookup[w]}) :
+                embedding_matrix[i + 1,:] = vecs[subword]
+                tmp_lookup[subword] = i + 1
+        else :
+            for i, subword in enumerate({s for w in lookup for s in lookup[w]}) :
+                embedding_matrix[i + 1,:] = vecs[subword]
+                tmp_lookup[subword] = i + 1
         lookup = {
             word : [tmp_lookup[s] for s in lookup[word]]
             for word in lookup
@@ -78,7 +86,7 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
     outputs = translate(outputs, decoder_lookup)
 
     # sort on length
-    data = zip(inputs, outputs)
+    data = list(zip(inputs, outputs))
     data.sort(key=lambda p: len(p[0]), reverse=True)
     inputs, outputs = zip(*data)
 

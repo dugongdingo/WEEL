@@ -91,7 +91,7 @@ def data_from_file(path, with_header=True):
 
 def to_chunks(iterable, chunk_size=BATCH_SIZE):
     i = iter(iterable)
-    piece = list(islice(i, n))
-    while piece:
-        yield piece
-        piece = list(islice(i, n))
+    chunk = list(islice(i, chunk_size))
+    while chunk:
+        yield chunk
+        chunk = list(islice(i, chunk_size))
