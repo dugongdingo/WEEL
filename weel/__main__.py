@@ -8,8 +8,8 @@ import random
 import shutil
 
 from .settings import *
-from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file, EOS, SOS
-from .nlgpipeline.lookup import compute_lookup, translate, reverse_lookup
+from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file, EOS, SOS, to_chunks
+from .nlgpipeline.lookup import compute_lookup, translate, reverse_lookup, make_batch
 from .nlgpipeline.network import Seq2SeqModel, EncoderRNN, AttnDecoderRNN
 
 #TODO: transfer settings & prefixes computation to settings.py
@@ -117,13 +117,9 @@ if MAKE_MODEL :
     print_now("building model %s..." % param_prefix)
     input_all = input_train + input_test + input_rest
     subword_lookup, subword_embeddings = compute_lookup(input_all, PATH_TO_FASTTEXT, use_subwords=True)
-    input_train = translate(input_train, subword_lookup, use_subwords=True)
     output_all = list(map(nltk.tokenize.word_tokenize, output_train + output_test + output_rest))
     decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT)
-    output_train = translate(
-        map(to_sentence, output_train),
-        decoder_lookup,
-    )
+    output_train = list(map(to_sentence, output_train))
 
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
 
@@ -153,8 +149,8 @@ if MAKE_MODEL :
     for epoch in map(str, range(1, EPOCHS + 1)):
         data = list(zip(input_train, output_train))
         random.shuffle(data)
-        input_train, output_train = zip(*data)
-        train_losses = model.train(input_train, output_train, epoch_number=epoch)
+        batches = (make_batch(ipts, opts, subword_lookup, decoder_lookup) for ipts, opts in to_chunks(data))
+        train_losses = model.train(batches, epoch_number=epoch)
 
         param_prefix = "lr" + str(LEARNING_RATE) +\
             "_d" + str(DROPOUT) +\

@@ -59,3 +59,9 @@ DEVICE = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LENGTH = 100
 
 MAKE_MODEL = True
+
+N_LAYERS = 1
+
+CLIP = 50.
+
+BATCH_SIZE = 50

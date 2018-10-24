@@ -1,11 +1,12 @@
 import csv
 import datetime
+from itertools import chain, islice, repeat, zip_longest
 
 import numpy
 import nltk.tokenize
 import torch
 
-from .settings import DEVICE
+from .settings import DEVICE, MAX_LENGTH, BATCH_SIZE
 
 SOS = "<SOS>"
 
@@ -13,12 +14,42 @@ EOS = "<EOS>"
 
 OOV = "<OOV>"
 
+PAD = "<PAD>"
+
+
 def to_tensor(seq, device=DEVICE) :
     return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
 
 
 def to_sentence(raw_str):
     return [SOS] + nltk.tokenize.word_tokenize(raw_str) + [EOS]
+
+
+def pad_one(sequence, max_length=MAX_LENGTH, padding_item=PAD) :
+    return list(islice(chain(sequence, repeat(padding_item)), max_length))
+
+
+def pad_all(sequences, max_length=None, padding_item=PAD) :
+    if max_length is None :
+        return  list(zip_longest(*sequences, fillvalue=padding_item))
+    else :
+        return [
+            pad_one(s, max_length=max_length, padding_item=padding_item)
+            for s in sequences
+        ]
+
+
+def to_batch_tensor(padded_sequences) :
+    return torch.LongTensor(padded_sequences)
+
+
+def compute_mask(padded_sequences, pad_item=PAD) :
+    pad_list = [
+        int(elem == pad_item)
+        for seq in padded_sequences
+        for elem in seq
+    ]
+    return torch.ByteTensor(pad_list)
 
 
 def random_vector(nb_dims):
@@ -56,3 +87,11 @@ def data_from_file(path, with_header=True):
         if with_header: istr.readline()
         csv_istr = csv.reader(istr)
         return zip(*(row for row in csv_istr))
+
+
+def to_chunks(iterable, chunk_size=BATCH_SIZE):
+    i = iter(iterable)
+    piece = list(islice(i, n))
+    while piece:
+        yield piece
+        piece = list(islice(i, n))

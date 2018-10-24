@@ -4,9 +4,10 @@ import itertools
 
 import numpy
 
+
 import fastText
 
-from ..utils import random_vector, EOS, SOS, OOV
+from ..utils import random_vector, EOS, SOS, OOV, PAD, pad_all, to_batch_tensor, compute_mask
 
 # start of sentence & end of sentence tokens
 
@@ -26,6 +27,8 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
             for w, idx in  zip(ngrams, subindices) :
                 if w not in vecs :
                     vecs[w] = model.get_input_vector(idx)
+        if not PAD in vecs:
+            vecs[PAD] = numpy.zeros((nb_dims,))
         embedding_matrix = numpy.zeros((len(vecs),nb_dims))
         del model
         tmp_lookup = {}
@@ -48,6 +51,8 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
             vecs[EOS] = random_vector(nb_dims)
         if not SOS in vecs:
             vecs[SOS] = random_vector(nb_dims)
+        if not PAD in vecs:
+            vecs[PAD] = numpy.zeros((nb_dims,))
         embedding_matrix = numpy.zeros((len(vecs), nb_dims))
         del model
         for i, s in enumerate(vecs) :
@@ -66,3 +71,29 @@ def translate(sequences, lookup, use_subwords=False) :
         return [lookup[word] for word in sequences]
     else:
         return [[lookup[item] for item in seq] for seq in sequences]
+
+def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
+    # convert to indices
+    inputs = translate(inputs, encoder_lookup, use_subwords=True)
+    outputs = translate(outputs, decoder_lookup)
+
+    # sort on length
+    data = zip(inputs, outputs)
+    data.sort(key=lambda p: len(p[0]), reverse=True)
+    inputs, outputs = zip(*data)
+
+    # compute lengths for packed sequences
+    inputs_lengths =  list(map(len, inputs))
+
+    # pad
+    inputs = pad_all(inputs, padding_item=encoder_lookup[PAD])
+    outputs = pad_all(outputs, padding_item=decoder_lookup[PAD])
+
+    # compute mask
+    outputs_mask = compute_mask(outputs)
+
+    # pytorch-friendly format
+    inputs = to_batch_tensor(inputs)
+    outputs = to_batch_tensor(outputs)
+
+    return inputs, inputs_lengths, outputs, outputs_mask
