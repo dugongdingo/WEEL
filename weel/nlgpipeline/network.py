@@ -8,7 +8,7 @@ import tqdm
 import torch
 import torch.nn.functional as functional
 
-from ..utils import to_tensor
+from ..utils import to_tensor, to_device
 from ..settings import DEVICE, MAX_LENGTH, HIDDEN_SIZE, N_LAYERS, CLIP, BATCH_SIZE
 
 class EncoderParams():
@@ -235,9 +235,9 @@ class Seq2SeqModel() :
         losses = []
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
-            for input_tensor, lengths, target_tensor, mask, max_target_length in batches :
+            for input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length in batches :
                 chunk_size = input_tensor.size(1)
-                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask, max_target_length, batch_size=chunk_size))
+                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length, batch_size=chunk_size))
                 pbar.update(chunk_size)
         return losses
 
