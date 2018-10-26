@@ -153,7 +153,7 @@ if MAKE_MODEL :
         random.shuffle(data)
 
         batches = (
-            make_batch(ipts, opts, subword_lookup, decoder_lookup)
+            make_batch(ipts, opts, subword_lookup, decoder_lookup, hollistic_lookup)
             for ipts, opts in (
                 zip(*chunk)
                 for chunk in to_chunks(data)

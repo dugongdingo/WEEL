@@ -114,7 +114,7 @@ class AttnDecoderRNN(torch.nn.Module):
         self.hollistic_embedding.requires_grad = False
 
         #embeddings concatenation layer
-        self.embeddings_concat = self.Linear(fasttext_embeddings.shape[1] + hollistic_word_embeddings.shape[1], self.params.hidden_size)
+        self.embeddings_concat = torch.nn.Linear(fasttext_embeddings.shape[1] + hollistic_word_embeddings.shape[1], self.params.hidden_size)
 
         # reccurent cell
         self.gru = torch.nn.GRU(
@@ -244,7 +244,7 @@ class Seq2SeqModel() :
     def run(self, input, opt, max_length=MAX_LENGTH):
         with torch.no_grad():
             loss = 0
-            length = torch.tensor([len(indexes) for indexes in input]).to(DEVICE)
+            length = torch.tensor([len(input)]).to(DEVICE)
             input_tensor = torch.LongTensor(input).transpose(0, 1).to(DEVICE)
             opt = torch.LongTensor(opt).transpose(0, 1).to(DEVICE)
             input_length = input_tensor.size()[0]

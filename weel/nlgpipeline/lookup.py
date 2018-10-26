@@ -90,9 +90,9 @@ def translate(sequences, lookup, use_subwords=False) :
 
 def make_batch(inputs, outputs, encoder_lookup, decoder_lookup, hollistic_lookup):
     # convert to indices
+    hollistic_indices = translate(inputs, hollistic_lookup)
     inputs = translate(inputs, encoder_lookup, use_subwords=True)
     outputs = translate(outputs, decoder_lookup)
-    hollistic_indices = translate(inputs, hollistic_lookup)
 
 
     # sort on length
