@@ -39,17 +39,17 @@ def pad_all(sequences, max_length=None, padding_item=PAD) :
         ]
 
 
-def to_batch_tensor(padded_sequences) :
-    return torch.LongTensor(padded_sequences)
+def to_batch_tensor(padded_sequences, device=DEVICE) :
+    return torch.LongTensor(padded_sequences).to(device)
 
 
-def compute_mask(padded_sequences, pad_item=PAD) :
+def compute_mask(padded_sequences, padding_item=PAD, device=DEVICE) :
     pad_list = [
-        int(elem == pad_item)
+        int(elem != padding_item)
         for seq in padded_sequences
         for elem in seq
     ]
-    return torch.ByteTensor(pad_list)
+    return torch.ByteTensor(pad_list).to(device)
 
 
 def random_vector(nb_dims):

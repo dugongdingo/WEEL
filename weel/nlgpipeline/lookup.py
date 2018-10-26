@@ -48,9 +48,8 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
         }
         if add_pad :
             lookup[PAD] = 0
-        return lookup, embedding_matrix
-
     else :
+        add_pad = False
         vecs = {
             w : model.get_word_vector(w)
             for s in sequences
@@ -61,14 +60,22 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
         if not SOS in vecs:
             vecs[SOS] = random_vector(nb_dims)
         if not PAD in vecs:
-            vecs[PAD] = numpy.zeros((nb_dims,))
-        embedding_matrix = numpy.zeros((len(vecs), nb_dims))
+            add_pad = True
+            embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
+        else :
+            embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
         del model
-        for i, s in enumerate(vecs) :
-            embedding_matrix[i,:] = vecs[s]
-            lookup[s] = i
-
-        return lookup, embedding_matrix
+        if add_pad :
+            for i, s in enumerate(vecs) :
+                embedding_matrix[i + 1,:] = vecs[s]
+                lookup[s] = i + 1
+        else:
+            for i, s in enumerate(vecs) :
+                embedding_matrix[i,:] = vecs[s]
+                lookup[s] = i
+        if add_pad :
+            lookup[PAD] = 0
+    return lookup, embedding_matrix
 
 
 def reverse_lookup(lookup) :
@@ -99,7 +106,7 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
     outputs = pad_all(outputs, padding_item=decoder_lookup[PAD])
 
     # compute mask
-    outputs_mask = compute_mask(outputs)
+    outputs_mask = compute_mask(outputs, padding_item=decoder_lookup[PAD])
 
     # pytorch-friendly format
     inputs = to_batch_tensor(inputs)

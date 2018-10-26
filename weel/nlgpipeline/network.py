@@ -32,6 +32,7 @@ class EncoderRNN(torch.nn.Module):
             self.params.hidden_size,
             self.params.n_layers,
             bidirectional=True,
+            batch_first=False,
         )
 
     def forward(self, inputs, input_lengths, hidden=None):
@@ -107,7 +108,12 @@ class AttnDecoderRNN(torch.nn.Module):
         # dropout
         self.dropout = torch.nn.Dropout(self.params.dropout_p)
         # reccurent cell
-        self.gru = torch.nn.GRU(fasttext_embeddings.shape[1], self.params.hidden_size, self.params.n_layers)
+        self.gru = torch.nn.GRU(
+            fasttext_embeddings.shape[1],
+            self.params.hidden_size,
+            self.params.n_layers,
+            batch_first=False,
+        )
         # attention layer
         self.attn = AttentionLayer(self.params.attn_method, self.params.hidden_size)
         # concatenation layer
@@ -139,7 +145,7 @@ class AttnDecoderRNN(torch.nn.Module):
     def initHidden(self):
         return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
 
-def maskNLLLoss(inp, target, mask):
+def maskNLLLoss(inp, target, mask, device=DEVICE):
     nTotal = mask.sum()
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)))
     loss = crossEntropy.masked_select(mask).mean()
@@ -165,8 +171,6 @@ class Seq2SeqModel() :
         self.decoder = decoder
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=self.params.learning_rate)
 
-        self.criterion = maskNLLLoss
-
     def _train_one(self, ipt, lengths, opt, mask, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
         encoder_hidden = self.encoder.initHidden()
 
@@ -175,7 +179,7 @@ class Seq2SeqModel() :
         self.decoder_optimizer.zero_grad()
 
 
-        ipt, lengths, mask, opt = ipt.to(device), lengths.to(device), opt.to(device), mask.to(device)
+        ipt, lengths, opt, mask = ipt.to(device), lengths.to(device), opt.to(device), mask.to(device)
 
         encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
 
@@ -189,19 +193,19 @@ class Seq2SeqModel() :
 
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
-            for di in range(max_target_length):
+            for timestep in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-                decoder_input = opt[di].view(1, -1)
-                mask_loss, n_total = self.criterion(decoder_output, opt[di], mask[di])
+                decoder_input = opt[timestep].view(1, -1)
+                mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
                 loss += mask_loss
                 n_totals += n_total
         else:
             # Without teacher forcing: use its own predictions as the next input
-            for di in range(max_target_length):
+            for timestep in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
                 _, topi = decoder_output.topk(1)
-                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device)
-                mask_loss, n_total = self.criterion(decoder_output, opt[di], mask[di])
+                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
+                mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
                 loss += mask_loss
                 n_totals += n_total
 
@@ -215,12 +219,13 @@ class Seq2SeqModel() :
 
         return loss.item() / n_totals
 
-    def train(self, batches, n_iters, chunk_size, epoch_number=None) :
+    def train(self, batches, n_iters, epoch_number=None) :
         losses = []
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
             for input_tensor, lengths, target_tensor, mask, max_target_length in batches :
-                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask, max_target_length))
+                chunk_size = input_tensor.size(1)
+                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask, max_target_length, batch_size=chunk_size))
                 pbar.update(chunk_size)
         return losses
 

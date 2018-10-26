@@ -158,7 +158,7 @@ if MAKE_MODEL :
             )
         )
 
-        train_losses = model.train(batches, len(input_train), BATCH_SIZE, epoch_number=epoch)
+        train_losses = model.train(batches, len(input_train), epoch_number=epoch)
 
         param_prefix = "lr" + str(LEARNING_RATE) +\
             "_d" + str(DROPOUT) +\
