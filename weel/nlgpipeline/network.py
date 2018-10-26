@@ -98,7 +98,7 @@ class AttentionLayer(torch.nn.Module):
         return functional.softmax(attn_energies, dim=1).unsqueeze(1)
 
 class AttnDecoderRNN(torch.nn.Module):
-    def __init__(self,fasttext_embeddings,**params):
+    def __init__(self,fasttext_embeddings, hollistic_word_embeddings, **params):
         super(AttnDecoderRNN, self).__init__()
         self.params = DecoderParams(**params)
         # embedding
@@ -107,25 +107,38 @@ class AttnDecoderRNN(torch.nn.Module):
         self.embedding.requires_grad = self.params.retrain
         # dropout
         self.dropout = torch.nn.Dropout(self.params.dropout_p)
+
+        #hollistic word vectors
+        self.hollistic_embedding = torch.nn.Embedding(*hollistic_word_embeddings.shape)
+        self.hollistic_embedding.weight.data.copy_(torch.from_numpy(hollistic_word_embeddings))
+        self.hollistic_embedding.requires_grad = False
+
+        #embeddings concatenation layer
+        self.embeddings_concat = self.Linear(fasttext_embeddings.shape[1] + hollistic_word_embeddings.shape[1], self.params.hidden_size)
+
         # reccurent cell
         self.gru = torch.nn.GRU(
-            fasttext_embeddings.shape[1],
+            self.params.hidden_size,
             self.params.hidden_size,
             self.params.n_layers,
             batch_first=False,
         )
         # attention layer
         self.attn = AttentionLayer(self.params.attn_method, self.params.hidden_size)
-        # concatenation layer
-        self.concat = torch.nn.Linear(self.params.hidden_size * 2, self.params.hidden_size)
+        # attention concatenation layer
+        self.attention_concat = torch.nn.Linear(self.params.hidden_size * 2, self.params.hidden_size)
         # output vocabulary mapping layer
         self.out = torch.nn.Linear(self.params.hidden_size, self.params.output_size)
 
-    def forward(self, input, hidden, encoder_outputs):
+    def forward(self, input, hidden, encoder_outputs, hollistic_indices):
         # embed
         embedded = self.embedding(input)
+        hollistic_word_vectors = self.hollistic_embedding(hollistic_indices)
         # drop
         embedded = self.dropout(embedded)
+        # concat with hollistic word vector
+        embedded = torch.cat((embedded, hollistic_word_vectors), 1)
+        embedded = torch.tanh(self.embeddings_concat(embedded))
         # recur
         rnn_output, hidden = self.gru(embedded, hidden)
         # attend
@@ -135,7 +148,7 @@ class AttnDecoderRNN(torch.nn.Module):
         rnn_output = rnn_output.squeeze(0)
         context = context.squeeze(1)
         concat_input = torch.cat((rnn_output, context), 1)
-        concat_output = torch.tanh(self.concat(concat_input))
+        concat_output = torch.tanh(self.attention_concat(concat_input))
         # map to output
         output = self.out(concat_output)
         output = functional.softmax(output, dim=1)
@@ -171,15 +184,14 @@ class Seq2SeqModel() :
         self.decoder = decoder
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=self.params.learning_rate)
 
-    def _train_one(self, ipt, lengths, opt, mask, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
+    def _train_one(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
         encoder_hidden = self.encoder.initHidden()
 
 
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
 
-
-        ipt, lengths, opt, mask = ipt.to(device), lengths.to(device), opt.to(device), mask.to(device)
+        ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
 
         encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
 
@@ -194,7 +206,7 @@ class Seq2SeqModel() :
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
             for timestep in range(max_target_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
                 decoder_input = opt[timestep].view(1, -1)
                 mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
                 loss += mask_loss
@@ -202,7 +214,7 @@ class Seq2SeqModel() :
         else:
             # Without teacher forcing: use its own predictions as the next input
             for timestep in range(max_target_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
                 _, topi = decoder_output.topk(1)
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
                 mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
@@ -229,37 +241,31 @@ class Seq2SeqModel() :
                 pbar.update(chunk_size)
         return losses
 
-    def run(self, input, opt):
+    def run(self, input, opt, max_length=MAX_LENGTH):
         with torch.no_grad():
             loss = 0
-            input_tensor = to_tensor(input)
-            opt = to_tensor(opt)
+            length = torch.tensor([len(indexes) for indexes in input]).to(DEVICE)
+            input_tensor = torch.LongTensor(input).transpose(0, 1).to(DEVICE)
+            opt = torch.LongTensor(opt).transpose(0, 1).to(DEVICE)
             input_length = input_tensor.size()[0]
-            encoder_hidden = self.encoder.initHidden()
 
-            encoder_outputs = torch.zeros(self.params.max_length, self.encoder.params.hidden_size, device=DEVICE)
+            encoder_outputs, encoder_hidden = self.encoder(input_tensor, length)
+            decoder_input = decoder_input = torch.ones(1, 1, device=device, dtype=torch.long) * self.params.sequence_start
 
-            for ei in range(input_length):
-                encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
-                encoder_outputs[ei] += encoder_output[0, 0]
+            decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
 
-            decoder_input = torch.tensor([self.params.sequence_start], device=DEVICE)
-
-            decoder_hidden = encoder_hidden
-
-            decoded_words = []
-            decoder_attentions = torch.zeros(self.params.max_length, self.params.max_length)
-
-            for di in range(self.params.max_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-                decoder_attentions[di] = decoder_attention.data
-                topv, topi = decoder_output.data.topk(1)
-                decoded_words.append(topi.item())
-                if di < opt.size(0) :
-                    loss += self.criterion(decoder_output, opt[di])
-                if topi.item() == self.params.end_signal:
-                    break
-
-                decoder_input = topi.squeeze().detach()
-
-            return decoded_words, loss.item() / opt.size(0)
+            all_tokens = torch.zeros([0], device=device, dtype=torch.long)
+            all_scores = torch.zeros([0], device=device)
+            # Iteratively decode one word token at a time
+            for _ in range(max_length):
+                # Forward pass through decoder
+                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+                # Obtain most likely word token and its softmax score
+                decoder_scores, decoder_input = torch.max(decoder_output, dim=1)
+                # Record token and score
+                all_tokens = torch.cat((all_tokens, decoder_input), dim=0)
+                all_scores = torch.cat((all_scores, decoder_scores), dim=0)
+                # Prepare current token to be next decoder input (add a dimension)
+                decoder_input = torch.unsqueeze(decoder_input, 0)
+            # Return collections of word tokens and scores
+            return all_tokens, all_scores

@@ -20,6 +20,8 @@ PAD = "<PAD>"
 def to_tensor(seq, device=DEVICE) :
     return torch.tensor(seq, dtype=torch.long, device=device).view(-1, 1)
 
+def to_device(*tensors, device=DEVICE):
+    return [t.to(device) for t in tensors]
 
 def to_sentence(raw_str):
     return [SOS] + nltk.tokenize.word_tokenize(raw_str) + [EOS]

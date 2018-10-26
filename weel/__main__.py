@@ -117,6 +117,7 @@ if MAKE_MODEL :
     print_now("building model %s..." % param_prefix)
     input_all = input_train + input_test + input_rest
     subword_lookup, subword_embeddings = compute_lookup(input_all, PATH_TO_FASTTEXT, use_subwords=True)
+    hollistic_lookup, hollistic_embeddings = compute_lookup([[i] for i in input_all], PATH_TO_FASTTEXT)
     output_all = list(map(nltk.tokenize.word_tokenize, output_train + output_test + output_rest))
     decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT)
     output_train = list(map(to_sentence, output_train))
@@ -131,6 +132,7 @@ if MAKE_MODEL :
 
     decoder = AttnDecoderRNN(
         decoder_embeddings,
+        hollistic_embeddings,
         hidden_size=HIDDEN_SIZE,
         output_size=len(decoder_lookup),
         dropout_p=DROPOUT,
@@ -182,16 +184,16 @@ if MAKE_MODEL :
                 map(to_sentence, output_test),
                 decoder_lookup,
             )
-            predictions, test_losses = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
+            predictions, scores = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
             predictions = translate(predictions, reverse_lookup(decoder_lookup))
             for word, prediction, definition in zip(input_test, predictions, output_test) :
                 csv_writer.writerow([word, definition, prediction])
-        print_now(
-            "avg loss train:",
-            sum(train_losses)/len(train_losses),
-            ", avg loss test:",
-            sum(test_losses)/len(test_losses)
-        )
+        #print_now(
+        #    "avg loss train:",
+        #    sum(train_losses)/len(train_losses),
+        #    ", avg loss test:",
+        #    sum(test_losses)/len(test_losses)
+        #)
 
 
     print_now("saving model...")

@@ -88,15 +88,17 @@ def translate(sequences, lookup, use_subwords=False) :
     else:
         return [[lookup[item] for item in seq] for seq in sequences]
 
-def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
+def make_batch(inputs, outputs, encoder_lookup, decoder_lookup, hollistic_lookup):
     # convert to indices
     inputs = translate(inputs, encoder_lookup, use_subwords=True)
     outputs = translate(outputs, decoder_lookup)
+    hollistic_indices = translate(inputs, hollistic_lookup)
+
 
     # sort on length
-    data = list(zip(inputs, outputs))
+    data = list(zip(inputs, outputs, hollistic_indices))
     data.sort(key=lambda p: len(p[0]), reverse=True)
-    inputs, outputs = zip(*data)
+    inputs, outputs, hollistic_indices = zip(*data)
 
     # compute lengths for packed sequences
     inputs_lengths = torch.tensor(list(map(len, inputs)))
@@ -111,5 +113,6 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup):
     # pytorch-friendly format
     inputs = to_batch_tensor(inputs)
     outputs = to_batch_tensor(outputs)
+    hollistic_indices = to_batch_tensor(hollistic_indices)
 
-    return inputs, inputs_lengths, outputs, outputs_mask, max_target_length
+    return inputs, inputs_lengths, outputs, outputs_mask, hollistic_indices, max_target_length
