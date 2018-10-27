@@ -54,7 +54,7 @@ EPOCHS = args.epochs or EPOCHS
 
 RETRAIN = args.retrain or RETRAIN
 
-DEVICE = "cpu" # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MAX_LENGTH = 100
 
