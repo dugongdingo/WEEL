@@ -179,12 +179,13 @@ if MAKE_MODEL :
         with open(test_result_path, "w") as ostr:
             csv_writer = csv.writer(ostr)
             csv_writer.writerow(["Word", "Definition", "Prediction"])
+            hollistic_indices_test_encrypted = translate([[i] for i in input_test], hollistic_lookup)
             input_test_encrypted = translate(input_test, subword_lookup, use_subwords=True)
             output_test_encrypted = translate(
                 map(to_sentence, output_test),
                 decoder_lookup,
             )
-            predictions, scores = zip(*(model.run(i, o) for i, o in zip(input_test_encrypted, output_test_encrypted)))
+            predictions, scores = zip(*(model.run(i, h, o) for i, h, o in zip(input_test_encrypted, hollistic_indices_test_encrypted, output_test_encrypted)))
             predictions = translate(predictions, reverse_lookup(decoder_lookup))
             for word, prediction, definition in zip(input_test, predictions, output_test) :
                 csv_writer.writerow([word, definition, prediction])

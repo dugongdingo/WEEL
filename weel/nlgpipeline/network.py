@@ -137,7 +137,7 @@ class AttnDecoderRNN(torch.nn.Module):
         # drop
         embedded = self.dropout(embedded)
         # concat with hollistic word vector
-        embedded = torch.cat((embedded, hollistic_word_vectors), 1)
+        embedded = torch.cat((embedded, hollistic_word_vectors), 2)
         embedded = torch.tanh(self.embeddings_concat(embedded))
         # recur
         rnn_output, hidden = self.gru(embedded, hidden)
@@ -192,7 +192,7 @@ class Seq2SeqModel() :
         self.decoder_optimizer.zero_grad()
 
         ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
-
+        hollistic_indices = hollistic_indices.transpose(0,1)
         encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
 
         loss = 0
@@ -241,25 +241,26 @@ class Seq2SeqModel() :
                 pbar.update(chunk_size)
         return losses
 
-    def run(self, input, opt, max_length=MAX_LENGTH):
+    def run(self, input, hollistic_index, opt, max_length=MAX_LENGTH):
         with torch.no_grad():
             loss = 0
             length = torch.tensor([len(input)]).to(DEVICE)
-            input_tensor = torch.LongTensor(input).transpose(0, 1).to(DEVICE)
-            opt = torch.LongTensor(opt).transpose(0, 1).to(DEVICE)
+            hollistic_index = torch.LongTensor([hollistic_index]).transpose(0, 1).to(DEVICE)
+            input_tensor = torch.LongTensor([input]).transpose(0, 1).to(DEVICE)
+            opt = torch.LongTensor([opt]).transpose(0, 1).to(DEVICE)
             input_length = input_tensor.size()[0]
 
             encoder_outputs, encoder_hidden = self.encoder(input_tensor, length)
-            decoder_input = decoder_input = torch.ones(1, 1, device=device, dtype=torch.long) * self.params.sequence_start
+            decoder_input = decoder_input = torch.ones(1, 1, device=DEVICE, dtype=torch.long) * self.params.sequence_start
 
             decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
 
-            all_tokens = torch.zeros([0], device=device, dtype=torch.long)
-            all_scores = torch.zeros([0], device=device)
+            all_tokens = torch.zeros([0], device=DEVICE, dtype=torch.long)
+            all_scores = torch.zeros([0], device=DEVICE)
             # Iteratively decode one word token at a time
-            for _ in range(max_length):
+            for timestep in range(max_length):
                 # Forward pass through decoder
-                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+                decoder_output, decoder_hidden, _ = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_index)
                 # Obtain most likely word token and its softmax score
                 decoder_scores, decoder_input = torch.max(decoder_output, dim=1)
                 # Record token and score
