@@ -8,7 +8,7 @@ import tqdm
 import torch
 import torch.nn.functional as functional
 
-from ..utils import to_tensor, to_device
+from ..utils import to_tensor, to_device, to_batch_tensor
 from ..settings import DEVICE, MAX_LENGTH, HIDDEN_SIZE, N_LAYERS, CLIP, BATCH_SIZE
 
 class EncoderParams():
@@ -166,7 +166,7 @@ def maskNLLLoss(inp, target, mask, device=DEVICE):
     return loss, nTotal.item()
 
 class Seq2SeqParams():
-    def __init__(self, learning_rate=0.001, sequence_start=None, end_signal=None, teacher_forcing_ratio=0.5, max_length = MAX_LENGTH,):
+    def __init__(self, learning_rate=0.0001, sequence_start=None, end_signal=None, teacher_forcing_ratio=1., max_length = MAX_LENGTH,):
         self.learning_rate = learning_rate
         self.sequence_start = sequence_start
         self.end_signal = end_signal
@@ -201,13 +201,14 @@ class Seq2SeqModel() :
 
         decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
 
-        use_teacher_forcing = bool(random.random() < self.params.teacher_forcing_ratio)
+        use_teacher_forcing = True#bool(random.random() < self.params.teacher_forcing_ratio)
 
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
             for timestep in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
                 decoder_input = opt[timestep].view(1, -1)
+
                 mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
                 loss += mask_loss
                 n_totals += n_total
@@ -216,6 +217,10 @@ class Seq2SeqModel() :
             for timestep in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
                 _, topi = decoder_output.topk(1)
+                if len({i.item() for j in topi for i in j}) == 1 :
+                    if next((i.item() for j in topi for i in j)) == 0 :
+                        #import pdb; pdb.set_trace()
+                        print(timestep)
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
                 mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
                 loss += mask_loss
@@ -223,26 +228,54 @@ class Seq2SeqModel() :
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), clip)
-        torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), clip)
+        _ = torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), clip)
+        _ = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), clip)
 
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
 
-        return loss.item() / n_totals
+        return loss.item() / n_totals, []
 
     def train(self, batches, n_iters, epoch_number=None) :
-        losses = []
+        losses, sentences = [], []
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
             for input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length in batches :
                 chunk_size = input_tensor.size(1)
-                losses.append(self._train_one(input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length, batch_size=chunk_size))
+                batch_loss, batched_sentences = self._train_one(input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length, batch_size=chunk_size)
+                losses.append(batch_loss)
+                sentences.extend(batched_sentences)
                 pbar.update(chunk_size)
         return losses
 
-    def run(self, input, hollistic_index, opt, max_length=MAX_LENGTH):
-        with torch.no_grad():
+    def run(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, batch_size=1):
+        with torch.no_grad() :
+            words = []
+
+            ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
+            hollistic_indices = hollistic_indices.transpose(0,1)
+
+            encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
+
+            decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
+
+            words.append(self.params.sequence_start)
+
+            decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
+
+            # Without teacher forcing: use its own predictions as the next input
+            for timestep in range(MAX_LENGTH):
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
+                _, topi = decoder_output.topk(1)
+                word = topi[0][0].item()# for i in range(batch_size)
+                words.append(word)
+                if word == self.params.end_signal :
+                    break
+                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
+
+            return words, 0
+
+        """with torch.no_grad():
             loss = 0
             length = torch.tensor([len(input)]).to(DEVICE)
             hollistic_index = torch.LongTensor([hollistic_index]).transpose(0, 1).to(DEVICE)
@@ -267,6 +300,7 @@ class Seq2SeqModel() :
                 all_tokens = torch.cat((all_tokens, decoder_input), dim=0)
                 all_scores = torch.cat((all_scores, decoder_scores), dim=0)
                 # Prepare current token to be next decoder input (add a dimension)
-                decoder_input = torch.unsqueeze(decoder_input, 0)
             # Return collections of word tokens and scores
-            return all_tokens, all_scores
+            if all_tokens.sum() == 0 :
+                import pdb; pdb.set_trace()
+            return all_tokens, all_scores"""

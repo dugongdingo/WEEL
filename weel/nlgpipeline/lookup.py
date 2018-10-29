@@ -7,7 +7,7 @@ import torch
 
 import fastText
 
-from ..utils import random_vector, EOS, SOS, OOV, PAD, pad_all, to_batch_tensor, compute_mask
+from ..utils import random_vector, EOS, SOS, OOV, PAD, pad_all, to_batch_tensor, compute_mask, lmap
 
 # start of sentence & end of sentence tokens
 
@@ -88,6 +88,7 @@ def translate(sequences, lookup, use_subwords=False) :
     else:
         return [[lookup[item] for item in seq] for seq in sequences]
 
+
 def make_batch(inputs, outputs, encoder_lookup, decoder_lookup, hollistic_lookup):
     # convert to indices
     hollistic_indices = translate([[i] for i in inputs], hollistic_lookup)
@@ -101,7 +102,7 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup, hollistic_lookup
     inputs, outputs, hollistic_indices = zip(*data)
 
     # compute lengths for packed sequences
-    inputs_lengths = torch.tensor(list(map(len, inputs)))
+    inputs_lengths = torch.tensor(lmap(len, inputs))
     max_target_length = max(map(len, outputs))
     # pad
     inputs = pad_all(inputs, padding_item=encoder_lookup[PAD])

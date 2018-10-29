@@ -58,6 +58,10 @@ def random_vector(nb_dims):
      return numpy.random.rand(nb_dims)
 
 
+def lmap(*args, **kwargs):
+    return list(map(*args, **kwargs))
+
+
 def print_now(*line) :
     """
     utility function: prepend timestamp to std output
