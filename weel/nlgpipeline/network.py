@@ -43,12 +43,9 @@ class EncoderRNN(torch.nn.Module):
         outputs = outputs[:, :, :self.params.hidden_size] + outputs[:, : ,self.params.hidden_size:]
         return outputs, hidden
 
-    def initHidden(self):
-        return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
-
 
 class DecoderParams():
-    def __init__(self, hidden_size=None, output_size=None, dropout_p=0.01,
+    def __init__(self, hidden_size=None, output_size=None, dropout_p=0.1,
         max_length=MAX_LENGTH, retrain=True, attn_method="general", n_layers=1,):
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -103,15 +100,15 @@ class AttnDecoderRNN(torch.nn.Module):
         self.params = DecoderParams(**params)
         # embedding
         self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
-        self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
-        self.embedding.requires_grad = self.params.retrain
+        """self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
+        self.embedding.requires_grad = self.params.retrain"""
         # dropout
         self.dropout = torch.nn.Dropout(self.params.dropout_p)
 
         #hollistic word vectors
         self.hollistic_embedding = torch.nn.Embedding(*hollistic_word_embeddings.shape)
         self.hollistic_embedding.weight.data.copy_(torch.from_numpy(hollistic_word_embeddings))
-        self.hollistic_embedding.requires_grad = False
+        #self.hollistic_embedding.requires_grad = False
 
         #embeddings concatenation layer
         self.embeddings_concat = torch.nn.Linear(fasttext_embeddings.shape[1] + hollistic_word_embeddings.shape[1], self.params.hidden_size)
@@ -137,7 +134,7 @@ class AttnDecoderRNN(torch.nn.Module):
         # drop
         embedded = self.dropout(embedded)
         # concat with hollistic word vector
-        embedded = torch.cat((embedded, hollistic_word_vectors), 2)
+        embedded = torch.cat((embedded.squeeze(0), hollistic_word_vectors.squeeze(0)), 1).unsqueeze(0)
         embedded = torch.tanh(self.embeddings_concat(embedded))
         # recur
         rnn_output, hidden = self.gru(embedded, hidden)
@@ -155,9 +152,6 @@ class AttnDecoderRNN(torch.nn.Module):
 
         return output, hidden, attn_weights
 
-    def initHidden(self):
-        return torch.zeros(1, 1, self.params.hidden_size, device=DEVICE)
-
 def maskNLLLoss(inp, target, mask, device=DEVICE):
     nTotal = mask.sum()
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)))
@@ -166,12 +160,13 @@ def maskNLLLoss(inp, target, mask, device=DEVICE):
     return loss, nTotal.item()
 
 class Seq2SeqParams():
-    def __init__(self, learning_rate=0.0001, sequence_start=None, end_signal=None, teacher_forcing_ratio=1., max_length = MAX_LENGTH,):
+    def __init__(self, learning_rate=0.0001, sequence_start=None, end_signal=None, teacher_forcing_ratio=.5, max_length = MAX_LENGTH, padding_index=0,):
         self.learning_rate = learning_rate
         self.sequence_start = sequence_start
         self.end_signal = end_signal
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.max_length = max_length
+        self.padding_index = padding_index
 
 
 class Seq2SeqModel() :
@@ -183,11 +178,16 @@ class Seq2SeqModel() :
 
         self.decoder = decoder
         self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=self.params.learning_rate)
+        self.criterion = torch.nn.CrossEntropyLoss(ignore_index=self.params.padding_index)
+
+    def training_mode(self):
+        self.encoder.train()
+        self.decoder.train()
+    def eval_mode(self) :
+        self.encoder.eval()
+        self.decoder.eval()
 
     def _train_one(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
-        encoder_hidden = self.encoder.initHidden()
-
-
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
 
@@ -195,36 +195,30 @@ class Seq2SeqModel() :
         hollistic_indices = hollistic_indices.transpose(0,1)
         encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
 
-        loss = 0
-        n_totals = 0
         decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
 
         decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
 
-        use_teacher_forcing = True#bool(random.random() < self.params.teacher_forcing_ratio)
+        use_teacher_forcing = bool(random.random() < self.params.teacher_forcing_ratio)
+
+        loss = 0
 
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
             for timestep in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
+                loss += self.criterion(decoder_output, opt[timestep])
                 decoder_input = opt[timestep].view(1, -1)
 
-                mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
-                loss += mask_loss
-                n_totals += n_total
         else:
             # Without teacher forcing: use its own predictions as the next input
             for timestep in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
+                loss += self.criterion(decoder_output, opt[timestep])
                 _, topi = decoder_output.topk(1)
-                if len({i.item() for j in topi for i in j}) == 1 :
-                    if next((i.item() for j in topi for i in j)) == 0 :
-                        #import pdb; pdb.set_trace()
-                        print(timestep)
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
-                mask_loss, n_total = maskNLLLoss(decoder_output, opt[timestep], mask[timestep])
-                loss += mask_loss
-                n_totals += n_total
+
+
 
         loss.backward()
 
@@ -234,7 +228,7 @@ class Seq2SeqModel() :
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
 
-        return loss.item() / n_totals, []
+        return loss.item() / mask.sum(), []
 
     def train(self, batches, n_iters, epoch_number=None) :
         losses, sentences = [], []
@@ -272,7 +266,6 @@ class Seq2SeqModel() :
                 if word == self.params.end_signal :
                     break
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
-
             return words, 0
 
         """with torch.no_grad():

@@ -1,6 +1,6 @@
 import csv
 import datetime
-from itertools import chain, islice, repeat, zip_longest
+from itertools import chain, islice, repeat, tee, zip_longest
 
 import numpy
 import nltk.tokenize
@@ -61,6 +61,10 @@ def random_vector(nb_dims):
 def lmap(*args, **kwargs):
     return list(map(*args, **kwargs))
 
+def async_zipslat(zipped_seqs) :
+    nb_seqs = len(next(tee(zipped_seqs)[-1]))
+    its = tee(zipped_seqs, nb_seqs)
+    return zip(*[(e[i] for e in its[i]) for i in range(nb_seqs)])
 
 def print_now(*line) :
     """

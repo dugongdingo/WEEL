@@ -3,14 +3,15 @@ import csv
 import datetime
 import itertools
 import nltk.tokenize
+import numpy
 import os
 import pickle
 import random
 import shutil
 
 from .settings import *
-from .utils import to_sentence, print_now, read_parsed_data_file, data_to_file, data_from_file, EOS, SOS, to_chunks, lmap
-from .nlgpipeline.lookup import compute_lookup, translate, reverse_lookup, make_batch
+from .utils import to_sentence, print_now, async_zipslat, read_parsed_data_file, data_to_file, data_from_file, EOS, SOS, PAD, to_chunks, lmap
+from .nlgpipeline.lookup import compute_lookup, mock_lookup, translate, reverse_lookup, make_batch
 from .nlgpipeline.network import Seq2SeqModel, EncoderRNN, AttnDecoderRNN
 
 #TODO: transfer settings & prefixes computation to settings.py
@@ -122,8 +123,11 @@ if MAKE_MODEL :
     output_all = lmap(nltk.tokenize.word_tokenize, output_train + output_test + output_rest)
     decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT)
     output_train = lmap(to_sentence, output_train)
-
+    output_all = [[SOS] + list(lemma) + [EOS] for lemma in input_all]
+    decoder_lookup, _ = mock_lookup(output_all)
+    output_train = [[SOS] + list(lemma) + [EOS] for lemma in input_train]
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
+
 
     encoder = EncoderRNN(
         subword_embeddings,
@@ -132,7 +136,7 @@ if MAKE_MODEL :
     ).to(DEVICE)
 
     decoder = AttnDecoderRNN(
-        decoder_embeddings,
+        numpy.zeros((len(decoder_lookup), decoder_embeddings.shape[1])),
         hollistic_embeddings,
         hidden_size=HIDDEN_SIZE,
         output_size=len(decoder_lookup),
@@ -147,9 +151,11 @@ if MAKE_MODEL :
         end_signal=decoder_lookup[EOS],
         max_length=max_length,
         learning_rate=LEARNING_RATE,
+        padding_index=decoder_lookup[PAD],
     )
     print_now("training model %s..." % param_prefix)
     for epoch in map(str, range(1, EPOCHS + 1)):
+        model.training_mode()
         print_now("epoch %s start" % epoch)
         data = list(zip(input_train, output_train))
         random.shuffle(data)
@@ -165,7 +171,8 @@ if MAKE_MODEL :
 
         train_losses = model.train(batches, len(input_train), epoch_number=epoch)
 
-        param_prefix = "lr" + str(LEARNING_RATE) +\
+        param_prefix = "loss_testing___" +\
+            "lr" + str(LEARNING_RATE) +\
             "_d" + str(DROPOUT) +\
             "_e" + epoch +\
             "_"
@@ -179,22 +186,23 @@ if MAKE_MODEL :
         )
         print_now("testing model...")
         test_losses = []
+        model.eval_mode()
         with open(test_result_path, "w") as ostr:
             csv_writer = csv.writer(ostr)
             csv_writer.writerow(["Word", "Definition", "Prediction"])
             output_test_sentences = lmap(to_sentence, output_test)
-            predictions, scores = zip(*(
+            predictions, _ = zip(*(
                 model.run(*p)
                 for p in (
                     make_batch(ipts, opts, subword_lookup, decoder_lookup, hollistic_lookup)
                     for ipts, opts in (
                         zip(*chunk)
-                        for chunk in to_chunks(zip(input_test, output_test_sentences), chunk_size=1)
+                        for chunk in to_chunks(zip(input_train[:100], output_train), chunk_size=1)
                     )
                 )
             ))
-            predictions =  translate(predictions, reverse_lookup(decoder_lookup))
-            for word, prediction, definition in zip(input_test, predictions, output_test) :
+            predictions = translate(predictions, reverse_lookup(decoder_lookup))
+            for word, prediction, definition in zip(input_train, predictions, output_train) :
                 csv_writer.writerow([word, definition, prediction])
         #print_now(
         #    "avg loss train:",

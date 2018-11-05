@@ -2,7 +2,7 @@
 file listing all settings:
     - storage paths
     - data parameters (wiki vs. wordnet, ambiguous entries, keeping examples)
-    - neural model parameters (learning rate, dropout, nnumber of epochs)
+    - neural model parameters (learning rate, dropout, nnumber of epochs...)
 """
 import argparse
 import os
@@ -27,9 +27,9 @@ NO_MWE = True
 
 KEEP_EXAMPLES = False
 
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.000001
 
-DROPOUT = 0.01
+DROPOUT = 0.2
 
 EPOCHS = 10
 

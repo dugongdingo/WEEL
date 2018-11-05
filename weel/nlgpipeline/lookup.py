@@ -117,3 +117,9 @@ def make_batch(inputs, outputs, encoder_lookup, decoder_lookup, hollistic_lookup
     hollistic_indices = to_batch_tensor(hollistic_indices)
 
     return inputs, inputs_lengths, outputs, outputs_mask, hollistic_indices, max_target_length
+
+
+def mock_lookup(seqs) :
+    lu = {c:i+1 for i,c in enumerate({c for seq in seqs for c in seq})}
+    lu[PAD] = 0
+    return lu, None
