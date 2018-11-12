@@ -84,18 +84,19 @@ def read_parsed_data_file(datafile) :
             yield row[0], row[3]
 
 
-def data_to_file(header, data, path):
+def data_to_file(data, path, header=None, sep="\t"):
     with open(path, "w") as ostr :
-        csv_ostr = csv.writer(ostr)
-        csv_ostr.writerow(header)
+        csv_ostr = csv.writer(ostr, delimiter=sep)
+        if header:
+            csv_ostr.writerow(header)
         for record in data :
             csv_ostr.writerow(record)
 
 
-def data_from_file(path, with_header=True):
+def data_from_file(path, with_header=True, sep="\t"):
     with open(path, "r") as istr:
         if with_header: istr.readline()
-        csv_istr = csv.reader(istr)
+        csv_istr = csv.reader(istr, delimiter=sep)
         return zip(*(row for row in csv_istr))
 
 

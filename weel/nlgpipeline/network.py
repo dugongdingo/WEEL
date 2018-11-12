@@ -46,7 +46,7 @@ class EncoderRNN(torch.nn.Module):
 
 class DecoderParams():
     def __init__(self, hidden_size=None, output_size=None, dropout_p=0.1,
-        max_length=MAX_LENGTH, retrain=True, attn_method="general", n_layers=1,):
+        max_length=MAX_LENGTH, retrain=True, attn_method="dot", n_layers=N_LAYERS,):
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.dropout_p = dropout_p
@@ -115,10 +115,10 @@ class AttnDecoderRNN(torch.nn.Module):
 
         # reccurent cell
         self.gru = torch.nn.GRU(
-            self.params.hidden_size,
+            fasttext_embeddings.shape[1],
             self.params.hidden_size,
             self.params.n_layers,
-            batch_first=False,
+            dropout=0.1,
         )
         # attention layer
         self.attn = AttentionLayer(self.params.attn_method, self.params.hidden_size)
@@ -130,12 +130,12 @@ class AttnDecoderRNN(torch.nn.Module):
     def forward(self, input, hidden, encoder_outputs, hollistic_indices):
         # embed
         embedded = self.embedding(input)
-        hollistic_word_vectors = self.hollistic_embedding(hollistic_indices)
+        #hollistic_word_vectors = self.hollistic_embedding(hollistic_indices)
         # drop
         embedded = self.dropout(embedded)
         # concat with hollistic word vector
-        embedded = torch.cat((embedded.squeeze(0), hollistic_word_vectors.squeeze(0)), 1).unsqueeze(0)
-        embedded = torch.tanh(self.embeddings_concat(embedded))
+        #embedded = torch.cat((embedded.squeeze(0), hollistic_word_vectors.squeeze(0)), 1).unsqueeze(0)
+        #embedded = torch.tanh(self.embeddings_concat(embedded))
         # recur
         rnn_output, hidden = self.gru(embedded, hidden)
         # attend
@@ -216,7 +216,7 @@ class Seq2SeqModel() :
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
                 loss += self.criterion(decoder_output, opt[timestep])
                 _, topi = decoder_output.topk(1)
-                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
+                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).view(1, -1).to(device)
 
 
 
@@ -242,9 +242,9 @@ class Seq2SeqModel() :
                 pbar.update(chunk_size)
         return losses
 
-    def run(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, batch_size=1):
+    def run(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, batch_size=BATCH_SIZE):
         with torch.no_grad() :
-            words = []
+            words = [[] for _ in range(batch_size)]
 
             ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
             hollistic_indices = hollistic_indices.transpose(0,1)
@@ -252,20 +252,18 @@ class Seq2SeqModel() :
             encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
 
             decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
-
-            words.append(self.params.sequence_start)
+            for i in range(batch_size):
+                words[i].append(decoder_input[0][i].item())
 
             decoder_hidden = encoder_hidden[:self.decoder.params.n_layers]
 
             # Without teacher forcing: use its own predictions as the next input
             for timestep in range(MAX_LENGTH):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
-                _, topi = decoder_output.topk(1)
-                word = topi[0][0].item()# for i in range(batch_size)
-                words.append(word)
-                if word == self.params.end_signal :
-                    break
-                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
+                _, decoder_input = decoder_output.max(1)
+                for i in range(batch_size):
+                    words[i].append(decoder_input[i].item())
+                decoder_input = torch.unsqueeze(decoder_input, 0)
             return words, 0
 
         """with torch.no_grad():

@@ -60,7 +60,7 @@ MAX_LENGTH = 100
 
 MAKE_MODEL = True
 
-N_LAYERS = 1
+N_LAYERS = 2
 
 CLIP = 50.
 
