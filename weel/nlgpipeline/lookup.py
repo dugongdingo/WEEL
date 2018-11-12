@@ -63,7 +63,7 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
             add_pad = True
             embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
         else :
-            embedding_matrix = numpy.zeros((len(vecs), nb_dims))
+            embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
         del model
         if add_pad :
             for i, s in enumerate(vecs) :
