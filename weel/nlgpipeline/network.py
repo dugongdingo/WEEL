@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as functional
 
 from ..utils import to_tensor, to_device, to_batch_tensor
-from ..settings import DEVICE, MAX_LENGTH, HIDDEN_SIZE, N_LAYERS, CLIP, BATCH_SIZE
+from ..settings import DEVICE, MAX_LENGTH, HIDDEN_SIZE, N_LAYERS, CLIP, BATCH_SIZE, LEARNING_RATE
 
 class EncoderParams():
     def __init__(self,hidden_size=HIDDEN_SIZE,retrain=False, n_layers=N_LAYERS):
@@ -46,7 +46,7 @@ class EncoderRNN(torch.nn.Module):
 
 class DecoderParams():
     def __init__(self, hidden_size=None, output_size=None, dropout_p=0.1,
-        max_length=MAX_LENGTH, retrain=True, attn_method="general", n_layers=1,):
+        max_length=MAX_LENGTH, retrain=True, attn_method="dot", n_layers=N_LAYERS,):
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.dropout_p = dropout_p
@@ -100,8 +100,8 @@ class AttnDecoderRNN(torch.nn.Module):
         self.params = DecoderParams(**params)
         # embedding
         self.embedding = torch.nn.Embedding(*fasttext_embeddings.shape)
-        """self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
-        self.embedding.requires_grad = self.params.retrain"""
+        self.embedding.weight.data.copy_(torch.from_numpy(fasttext_embeddings))
+        #self.embedding.requires_grad = self.params.retrain
         # dropout
         self.dropout = torch.nn.Dropout(self.params.dropout_p)
 
@@ -118,7 +118,6 @@ class AttnDecoderRNN(torch.nn.Module):
             self.params.hidden_size,
             self.params.hidden_size,
             self.params.n_layers,
-            batch_first=False,
         )
         # attention layer
         self.attn = AttentionLayer(self.params.attn_method, self.params.hidden_size)
@@ -160,7 +159,7 @@ def maskNLLLoss(inp, target, mask, device=DEVICE):
     return loss, nTotal.item()
 
 class Seq2SeqParams():
-    def __init__(self, learning_rate=0.0001, sequence_start=None, end_signal=None, teacher_forcing_ratio=.5, max_length = MAX_LENGTH, padding_index=0,):
+    def __init__(self, learning_rate=LEARNING_RATE, sequence_start=None, end_signal=None, teacher_forcing_ratio=.5, max_length = MAX_LENGTH, padding_index=0,):
         self.learning_rate = learning_rate
         self.sequence_start = sequence_start
         self.end_signal = end_signal
@@ -174,10 +173,10 @@ class Seq2SeqModel() :
         self.params = Seq2SeqParams(**params)
 
         self.encoder = encoder
-        self.encoder_optimizer = torch.optim.SGD(self.encoder.parameters(), lr=self.params.learning_rate)
+        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), lr=self.params.learning_rate)
 
         self.decoder = decoder
-        self.decoder_optimizer = torch.optim.SGD(self.decoder.parameters(), lr=self.params.learning_rate)
+        self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(), lr=self.params.learning_rate)
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=self.params.padding_index)
 
     def training_mode(self):
@@ -194,6 +193,8 @@ class Seq2SeqModel() :
         ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
         hollistic_indices = hollistic_indices.transpose(0,1)
         encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
+
+        encoder_outputs = self.mask_mininf(encoder_outputs, lengths)
 
         decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
 
@@ -242,6 +243,16 @@ class Seq2SeqModel() :
                 pbar.update(chunk_size)
         return losses
 
+    def mask_mininf(self, encoder_outputs, input_lengths):
+        num_timesteps, batch_size, hidden_size = encoder_outputs.size()
+        mask = torch.ByteTensor([
+            [
+                [int(timestep >= input_lengths[batch_ex])]  * hidden_size
+                for batch_ex in range(batch_size)
+            ] for timestep in range(num_timesteps)
+        ])
+        return encoder_outputs.masked_fill(mask, - float(math.inf))
+
     def run(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, batch_size=1):
         with torch.no_grad() :
             words = []
@@ -260,12 +271,12 @@ class Seq2SeqModel() :
             # Without teacher forcing: use its own predictions as the next input
             for timestep in range(MAX_LENGTH):
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, hollistic_indices)
-                _, topi = decoder_output.topk(1)
-                word = topi[0][0].item()# for i in range(batch_size)
+                _, decoder_input = torch.max(decoder_output, dim=1)
+                word = decoder_input.item()# for i in range(batch_size)
                 words.append(word)
                 if word == self.params.end_signal :
                     break
-                decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
+                decoder_input = torch.unsqueeze(decoder_input, 0).to(device)
             return words, 0
 
         """with torch.no_grad():

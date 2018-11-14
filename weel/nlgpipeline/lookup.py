@@ -13,7 +13,7 @@ from ..utils import random_vector, EOS, SOS, OOV, PAD, pad_all, to_batch_tensor,
 
 
 
-def compute_lookup(sequences, fastText_path, use_subwords=False):
+def compute_lookup(sequences, fastText_path, use_subwords=False, trim_threshold=None):
     lookup = {}
 
     model = fastText.load_model(fastText_path)
@@ -49,37 +49,75 @@ def compute_lookup(sequences, fastText_path, use_subwords=False):
         if add_pad :
             lookup[PAD] = 0
     else :
-        add_pad = False
-        vecs = {
-            w : model.get_word_vector(w)
-            for s in sequences
-            for w in s
-        }
-        if not EOS in vecs:
-            vecs[EOS] = random_vector(nb_dims)
-        if not SOS in vecs:
-            vecs[SOS] = random_vector(nb_dims)
-        if not PAD in vecs:
-            add_pad = True
-            embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
+        if trim_threshold:
+            add_pad = False
+            cnt = collections.Counter(w for s in sequences for w in s)
+            vecs = {
+                w : model.get_word_vector(w)
+                for s in sequences
+                for w in s
+            }
+            thresh = collections.Counter({w:trim_threshold for s in sequences for w in s})
+            cnt = +(cnt - thresh)
+            if not OOV in vecs:
+                vecs[OOV] = random_vector(nb_dims)
+            if not EOS in vecs:
+                vecs[EOS] = random_vector(nb_dims)
+            if not SOS in vecs:
+                vecs[SOS] = random_vector(nb_dims)
+            if not PAD in vecs:
+                add_pad = True
+                vecs[PAD] = random_vector(nb_dims)
+                embedding_matrix = numpy.zeros((len(cnt.keys() | {OOV, EOS, SOS, PAD}), nb_dims))
+            else :
+                embedding_matrix = numpy.zeros((len(cnt.keys() | {OOV, EOS, SOS}), nb_dims))
+            del model
+            if add_pad :
+                for i, s in enumerate(cnt.keys() | {OOV, EOS, SOS, PAD}) :
+                    embedding_matrix[i,:] = vecs[s]
+                    lookup[s] = i
+                for s in vecs.keys() :
+                    if not s in lookup: lookup[s] = lookup[OOV]
+            else:
+                for i, s in enumerate(vecs) :
+                    embedding_matrix[i,:] = vecs[s]
+                    lookup[s] = i
+            if add_pad :
+                lookup[PAD] = 0
         else :
-            embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
-        del model
-        if add_pad :
-            for i, s in enumerate(vecs) :
-                embedding_matrix[i + 1,:] = vecs[s]
-                lookup[s] = i + 1
-        else:
-            for i, s in enumerate(vecs) :
-                embedding_matrix[i,:] = vecs[s]
-                lookup[s] = i
-        if add_pad :
-            lookup[PAD] = 0
+            add_pad = False
+            vecs = {
+                w : model.get_word_vector(w)
+                for s in sequences
+                for w in s
+            }
+            if not EOS in vecs:
+                vecs[EOS] = random_vector(nb_dims)
+            if not SOS in vecs:
+                vecs[SOS] = random_vector(nb_dims)
+            if not PAD in vecs:
+                add_pad = True
+                embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
+            else :
+                embedding_matrix = numpy.zeros((len(vecs) + 1, nb_dims))
+            del model
+            if add_pad :
+                for i, s in enumerate(vecs) :
+                    embedding_matrix[i + 1,:] = vecs[s]
+                    lookup[s] = i + 1
+            else:
+                for i, s in enumerate(vecs) :
+                    embedding_matrix[i,:] = vecs[s]
+                    lookup[s] = i
+            if add_pad :
+                lookup[PAD] = 0
     return lookup, embedding_matrix
 
 
 def reverse_lookup(lookup) :
-    return {lookup[item]:item for item in lookup}
+    rlookup = {lookup[item]:item for item in lookup}
+    rlookup[lookup[OOV]] = OOV
+    return rlookup
 
 
 def translate(sequences, lookup, use_subwords=False) :

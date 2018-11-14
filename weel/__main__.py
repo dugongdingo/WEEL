@@ -120,12 +120,9 @@ if MAKE_MODEL :
     input_all = input_train + input_test + input_rest
     subword_lookup, subword_embeddings = compute_lookup(input_all, PATH_TO_FASTTEXT, use_subwords=True)
     hollistic_lookup, hollistic_embeddings = compute_lookup([[i] for i in input_all], PATH_TO_FASTTEXT)
-    output_all = lmap(nltk.tokenize.word_tokenize, output_train + output_test + output_rest)
-    decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT)
+    output_all = lmap(to_sentence, output_train + output_test + output_rest)
+    decoder_lookup, decoder_embeddings = compute_lookup(output_all, PATH_TO_FASTTEXT, trim_threshold=3)
     output_train = lmap(to_sentence, output_train)
-    output_all = [[SOS] + list(lemma) + [EOS] for lemma in input_all]
-    decoder_lookup, _ = mock_lookup(output_all)
-    output_train = [[SOS] + list(lemma) + [EOS] for lemma in input_train]
     max_length = max(max(map(len, input_train)), max(map(len, output_train)))
 
 
@@ -197,7 +194,7 @@ if MAKE_MODEL :
                     make_batch(ipts, opts, subword_lookup, decoder_lookup, hollistic_lookup)
                     for ipts, opts in (
                         zip(*chunk)
-                        for chunk in to_chunks(zip(input_train[:100], output_train), chunk_size=1)
+                        for chunk in to_chunks(zip(input_test[:100], output_test_sentences), chunk_size=1)
                     )
                 )
             ))
