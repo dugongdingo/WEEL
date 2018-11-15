@@ -27,7 +27,7 @@ NO_MWE = True
 
 KEEP_EXAMPLES = False
 
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.005
 
 DROPOUT = 0.2
 
@@ -54,7 +54,7 @@ EPOCHS = args.epochs or EPOCHS
 
 RETRAIN = args.retrain or RETRAIN
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MAX_LENGTH = 100
 

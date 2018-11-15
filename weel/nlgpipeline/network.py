@@ -91,21 +91,21 @@ class AttentionLayer(torch.nn.Module):
         attn_energies = attn_energies.t()
 
         # Return the softmax normalized probability scores (with added dimension)
-        return functional.softmax(attn_energies, dim=1).unsqueeze(1)
+        return attn_energies.unsqueeze(1) # functional.softmax(attn_energies, dim=1).unsqueeze(1)
 
 def mask_mininf(aligned_weights, input_lengths):
     """
     hoa says i should also mask attention weights
     """
-    num_timesteps, batch_size, n_dims = aligned_weights.size()
+    batch_size,  n_dims, num_timesteps, = aligned_weights.size()
     mask = torch.ByteTensor([
         [
-            [bool(timestep >= input_lengths[batch_ex]) for _ in range(n_dims)]
-            for batch_ex in range(batch_size)
-        ] for timestep in range(num_timesteps)
+            [bool(timestep < input_lengths[batch_ex]) for timestep in range(num_timesteps)]
+            for _ in range(n_dims)
+        ] for batch_ex in range(batch_size)
     ])
     weights = aligned_weights.clone()
-    weights.masked_fill_(mask, -float('inf'))
+    weights.masked_fill_(1 - mask, -math.inf)
     return weights
 
 class AttnDecoderRNN(torch.nn.Module):
@@ -154,7 +154,8 @@ class AttnDecoderRNN(torch.nn.Module):
         rnn_output, hidden = self.gru(embedded, hidden)
         # attend
         attn_weights = self.attn(rnn_output, encoder_outputs)
-        #attn_weights = functional.softmax(mask_mininf(attn_weights, input_lengths), dim=1)
+        attn_weights = mask_mininf(attn_weights, input_lengths)
+        attn_weights = functional.softmax(attn_weights, dim=0)
 
         context = attn_weights.bmm(encoder_outputs.transpose(0, 1))
         # concat
@@ -228,7 +229,7 @@ class Seq2SeqModel() :
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, lengths, hollistic_indices)
                 decoder_input = opt[timestep].view(1, -1)
                 a, _ = maskNLLLoss(decoder_output, opt[timestep], mask)
-                loss += self.criterion(decoder_output, opt[timestep])
+                loss += a#self.criterion(decoder_output, opt[timestep])
 
         else:
             # Without teacher forcing: use its own predictions as the next input
@@ -237,7 +238,7 @@ class Seq2SeqModel() :
                 _, topi = decoder_output.topk(1)
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
                 a, _ = maskNLLLoss(decoder_output, opt[timestep], mask)
-                loss += self.criterion(decoder_output, opt[timestep])
+                loss += a#self.criterion(decoder_output, opt[timestep])
 
         loss.backward()
 

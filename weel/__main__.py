@@ -168,7 +168,7 @@ if MAKE_MODEL :
 
         train_losses = model.train(batches, len(input_train), epoch_number=epoch)
 
-        param_prefix = "loss_testing___" +\
+        param_prefix = "loss_test___" +\
             "lr" + str(LEARNING_RATE) +\
             "_d" + str(DROPOUT) +\
             "_e" + epoch +\
