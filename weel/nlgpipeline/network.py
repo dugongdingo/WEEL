@@ -228,7 +228,7 @@ class Seq2SeqModel() :
                 decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, lengths, hollistic_indices)
                 decoder_input = opt[timestep].view(1, -1)
                 a, _ = maskNLLLoss(decoder_output, opt[timestep], mask)
-                loss += a
+                loss += self.criterion(decoder_output, opt[timestep])
 
         else:
             # Without teacher forcing: use its own predictions as the next input
@@ -237,7 +237,7 @@ class Seq2SeqModel() :
                 _, topi = decoder_output.topk(1)
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
                 a, _ = maskNLLLoss(decoder_output, opt[timestep], mask)
-                loss += a
+                loss += self.criterion(decoder_output, opt[timestep])
 
         loss.backward()
 
