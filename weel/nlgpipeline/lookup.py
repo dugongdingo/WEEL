@@ -91,6 +91,8 @@ def compute_lookup(sequences, fastText_path, use_subwords=False, trim_threshold=
                 for s in sequences
                 for w in s
             }
+            if not OOV in vecs:
+                vecs[OOV] = random_vector(nb_dims)
             if not EOS in vecs:
                 vecs[EOS] = random_vector(nb_dims)
             if not SOS in vecs:
