@@ -133,7 +133,7 @@ if MAKE_MODEL :
     ).to(DEVICE)
 
     decoder = AttnDecoderRNN(
-        numpy.zeros((len(decoder_lookup), decoder_embeddings.shape[1])),
+        decoder_embeddings,
         hollistic_embeddings,
         hidden_size=HIDDEN_SIZE,
         output_size=len(decoder_lookup),
@@ -156,7 +156,7 @@ if MAKE_MODEL :
         print_now("epoch %s start" % epoch)
         data = list(zip(input_train, output_train))
         random.shuffle(data)
-        data.sort(key=lambda t: len(t[1]))
+        #data.sort(key=lambda t: len(t[1]))
 
         batches = (
             make_batch(ipts, opts, subword_lookup, decoder_lookup, hollistic_lookup)

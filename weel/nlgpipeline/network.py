@@ -104,9 +104,9 @@ def mask_mininf(aligned_weights, input_lengths):
             for _ in range(n_dims)
         ] for batch_ex in range(batch_size)
     ])
-    weights = aligned_weights.clone()
-    weights.masked_fill_(1 - mask, -math.inf)
-    return weights
+
+    aligned_weights.masked_fill_(1 - mask, -math.inf)
+    return aligned_weights
 
 class AttnDecoderRNN(torch.nn.Module):
     def __init__(self,fasttext_embeddings, hollistic_word_embeddings, **params):
@@ -204,18 +204,16 @@ class Seq2SeqModel() :
         self.encoder.eval()
         self.decoder.eval()
 
-    def _train_one(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
+    def _train_one(self, source, source_lengths, target, mask, hollistic_indices, max_target_length, device=DEVICE, clip=CLIP, batch_size=BATCH_SIZE):
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
 
-        ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
+        source, source_lengths, target, hollistic_indices, mask = to_device(source, source_lengths, target, hollistic_indices, mask, device=device)
         hollistic_indices = hollistic_indices.transpose(0,1)
 
         loss = 0
 
-        encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
-
-        #self.mask_mininf(encoder_outputs, lengths)
+        encoder_outputs, encoder_hidden = self.encoder(source, source_lengths)
 
         decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
 
@@ -226,19 +224,19 @@ class Seq2SeqModel() :
         if use_teacher_forcing:
             # Teacher forcing: Feed the target as the next input
             for timestep in range(max_target_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, lengths, hollistic_indices)
-                decoder_input = opt[timestep].view(1, -1)
-                a, _ = maskNLLLoss(decoder_output, opt[timestep], mask)
-                loss += a#self.criterion(decoder_output, opt[timestep])
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, source_lengths, hollistic_indices)
+                decoder_input = target[timestep].view(1, -1)
+                a, _ = maskNLLLoss(decoder_output, target[timestep], mask)
+                loss += a#self.criterion(decoder_output, target[timestep])
 
         else:
             # Without teacher forcing: use its own predictions as the next input
             for timestep in range(max_target_length):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, lengths, hollistic_indices)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, source_lengths, hollistic_indices)
                 _, topi = decoder_output.topk(1)
                 decoder_input = torch.LongTensor([topi[i][0] for i in range(batch_size)]).to(device).view(1, -1)
-                a, _ = maskNLLLoss(decoder_output, opt[timestep], mask)
-                loss += a#self.criterion(decoder_output, opt[timestep])
+                a, _ = maskNLLLoss(decoder_output, target[timestep], mask)
+                loss += a#self.criterion(decoder_output, target[timestep])
 
         loss.backward()
 
@@ -254,22 +252,22 @@ class Seq2SeqModel() :
         losses, sentences = [], []
 
         with tqdm.tqdm(total=n_iters, desc="Training epoch #" + epoch_number, ascii=True) as pbar :
-            for input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length in batches :
+            for input_tensor, source_lengths, target_tensor, mask, hollistic_indices, max_target_length in batches :
                 chunk_size = input_tensor.size(1)
-                batch_loss, batched_sentences = self._train_one(input_tensor, lengths, target_tensor, mask, hollistic_indices, max_target_length, batch_size=chunk_size)
+                batch_loss, batched_sentences = self._train_one(input_tensor, source_lengths, target_tensor, mask, hollistic_indices, max_target_length, batch_size=chunk_size)
                 losses.append(batch_loss)
                 sentences.extend(batched_sentences)
                 pbar.update(chunk_size)
         return losses
 
-    def run(self, ipt, lengths, opt, mask, hollistic_indices, max_target_length, device=DEVICE, batch_size=1):
+    def run(self, source, source_lengths, target, mask, hollistic_indices, max_target_length, device=DEVICE, batch_size=1):
         with torch.no_grad() :
             words = []
 
-            ipt, lengths, opt, hollistic_indices, mask = to_device(ipt, lengths, opt, hollistic_indices, mask, device=device)
+            source, source_lengths, target, hollistic_indices, mask = to_device(source, source_lengths, target, hollistic_indices, mask, device=device)
             hollistic_indices = hollistic_indices.transpose(0,1)
 
-            encoder_outputs, encoder_hidden = self.encoder(ipt, lengths)
+            encoder_outputs, encoder_hidden = self.encoder(source, source_lengths)
 
             decoder_input = torch.LongTensor([[self.params.sequence_start] * batch_size]).to(device)
 
@@ -279,7 +277,7 @@ class Seq2SeqModel() :
 
             # Without teacher forcing: use its own predictions as the next input
             for timestep in range(MAX_LENGTH):
-                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, lengths, hollistic_indices)
+                decoder_output, decoder_hidden, decoder_attention = self.decoder(decoder_input, decoder_hidden, encoder_outputs, source_lengths, hollistic_indices)
                 _, decoder_input = torch.max(decoder_output, dim=1)
                 word = decoder_input.item()# for i in range(batch_size)
                 words.append(word)
